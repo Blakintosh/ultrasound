@@ -8,6 +8,10 @@ Ultrasound is a drop-in replacement for the Black Ops III Mod Tools' snd_convert
 
 Navigate to the [Releases](https://github.com/Blakintosh/ultrasound/releases) tab to download the latest release. From here, the `README.md` inside the release will guide you through the installation process.
 
+## Issues
+
+The current version of Ultrasound is an early release and may not yet achieve complete feature parity with the original snd_convert. If you encounter any issues where sound files do not parse with Ultrasound (but do parse with snd_convert), please file an issue report.
+
 ## Performance
 
 All of the following performance metrics has been produced locally on a map level with ~1GB of total sound assets.
