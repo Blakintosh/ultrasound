@@ -71,7 +71,7 @@ pub fn expand(
 }
 
 fn is_supported_audio_ext(ext: Option<&str>) -> bool {
-    matches!(ext, Some("wav") | Some("flac"))
+    matches!(ext, Some("wav") | Some("flac") | Some("ogg"))
 }
 
 /// If `full` is a supported audio file, return [full]. If it's a directory,

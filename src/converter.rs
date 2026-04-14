@@ -6,6 +6,7 @@ use crate::{
     bank::bank_entry::BankEntry,
     decoded_audio::DecodedAudio,
     flac,
+    ogg,
     riff::Riff,
     source_asset_cache::Checksum,
     tables::{row_locale::RowLocale, row_platform::RowPlatform},
@@ -105,14 +106,17 @@ pub fn convert_source_inline(
         .map_err(|e| format!("Failed to read file {}: {}", asset.source_name, e))?;
     let source_checksum = Checksum::from_data(&data);
 
-    let is_flac = Path::new(&asset.source_name)
+    let ext = Path::new(&asset.source_name)
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("flac"))
-        .unwrap_or(false);
+        .unwrap_or("");
 
-    let audio = if is_flac {
+    let audio = if ext.eq_ignore_ascii_case("flac") {
         let decoded = flac::decode(&asset.source_name, &data)?;
+        drop(data);
+        decoded
+    } else if ext.eq_ignore_ascii_case("ogg") {
+        let decoded = ogg::decode(&asset.source_name, &data)?;
         drop(data);
         decoded
     } else {

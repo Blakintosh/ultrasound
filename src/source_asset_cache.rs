@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, fs::{self, Metadata}, path::Path, tim
 use md5::{Md5, Digest};
 use rayon::prelude::*;
 
-use crate::{asset_types::AssetEnvelope, bank::bank_entry::BankEntry, decoded_audio::DecodedAudio, flac, riff::Riff};
+use crate::{asset_types::AssetEnvelope, bank::bank_entry::BankEntry, decoded_audio::DecodedAudio, flac, ogg, riff::Riff};
 
 pub struct SourceAssetCache {
     assets: HashMap<String, SourceAsset>
@@ -137,14 +137,17 @@ impl SourceAsset {
             .map_err(|e| format!("Failed to read file {}: {}", file_name, e))?;
         let hash = Checksum::from_data(&data);
 
-        let is_flac = Path::new(file_name)
+        let ext = Path::new(file_name)
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("flac"))
-            .unwrap_or(false);
+            .unwrap_or("");
 
-        let audio = if is_flac {
+        let audio = if ext.eq_ignore_ascii_case("flac") {
             let decoded = flac::decode(file_name, &data)?;
+            drop(data);
+            decoded
+        } else if ext.eq_ignore_ascii_case("ogg") {
+            let decoded = ogg::decode(file_name, &data)?;
             drop(data);
             decoded
         } else {
