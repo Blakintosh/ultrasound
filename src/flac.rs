@@ -427,4 +427,100 @@ mod tests {
             audio.frame_count as usize * audio.channel_count as usize
         );
     }
+
+    /// Exploratory: measure whether routing PCM through a lossy Vorbis pass
+    /// before FLAC-encoding produces a smaller bank payload than FLAC'ing
+    /// the raw PCM directly. Not an assertion test — it prints sizes so a
+    /// human can eyeball the ratio. Run with:
+    ///   cargo test --release lossy_prepass_shrinks_flac -- --nocapture
+    #[test]
+    fn lossy_prepass_shrinks_flac() {
+        use std::io::Cursor;
+        use std::num::{NonZeroU8, NonZeroU32};
+        use lewton::inside_ogg::OggStreamReader;
+        use vorbis_rs::{VorbisEncoderBuilder, VorbisBitrateManagementStrategy};
+
+        let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present");
+        let audio = decode(SAMPLE_FLAC, &data).expect("flac decodes");
+        let sample_rate = audio.frame_rate as i32;
+        let channels = audio.channel_count as i32;
+        let frame_count = audio.frame_count as i32;
+
+        // Baseline: encode the raw PCM straight to FLAC at our normal level.
+        let baseline = encode(SAMPLE_FLAC, channels, sample_rate, frame_count, &audio.samples)
+            .expect("baseline flac encode");
+
+        // Split interleaved i16 → per-channel f32 in [-1, 1] for vorbis_rs.
+        let ch = channels as usize;
+        let mut planar: Vec<Vec<f32>> = vec![Vec::with_capacity(frame_count as usize); ch];
+        for frame in audio.samples.chunks_exact(ch) {
+            for (c, s) in frame.iter().enumerate() {
+                planar[c].push(*s as f32 / 32768.0);
+            }
+        }
+
+        // Encode PCM → Vorbis at several quality rungs, decode back, re-FLAC.
+        for quality in [0.1_f32, 0.3, 0.5, 0.7] {
+            let mut ogg_bytes: Vec<u8> = Vec::new();
+            {
+                let mut enc = VorbisEncoderBuilder::new(
+                    NonZeroU32::new(sample_rate as u32).unwrap(),
+                    NonZeroU8::new(channels as u8).unwrap(),
+                    &mut ogg_bytes,
+                )
+                .expect("vorbis builder")
+                .bitrate_management_strategy(VorbisBitrateManagementStrategy::QualityVbr {
+                    target_quality: quality,
+                })
+                .build()
+                .expect("vorbis build");
+
+                let block: Vec<&[f32]> = planar.iter().map(|v| v.as_slice()).collect();
+                enc.encode_audio_block(&block).expect("vorbis encode block");
+                enc.finish().expect("vorbis finish");
+            }
+
+            // Decode the OGG back to interleaved i16 with lewton.
+            let mut reader = OggStreamReader::new(Cursor::new(&ogg_bytes))
+                .expect("ogg reader");
+            let mut round_trip: Vec<i16> = Vec::with_capacity(audio.samples.len());
+            while let Some(packet) = reader.read_dec_packet_itl().expect("ogg packet") {
+                round_trip.extend_from_slice(&packet);
+            }
+            let rt_frames = (round_trip.len() / ch) as i32;
+
+            let flac_after = encode(SAMPLE_FLAC, channels, sample_rate, rt_frames, &round_trip)
+                .expect("post-vorbis flac encode");
+
+            let pct = 100.0 * flac_after.len() as f64 / baseline.len() as f64;
+            println!(
+                "quality {:.1}: ogg={}B, flac_after_ogg={}B, baseline_flac={}B, ratio={:.1}%",
+                quality,
+                ogg_bytes.len(),
+                flac_after.len(),
+                baseline.len(),
+                pct
+            );
+        }
+
+        // Bit-depth truncation: mask off the lowest N bits of each 16-bit
+        // sample and re-encode. No dither — crudest possible requantisation,
+        // which is the worst case for audible noise but the best case for
+        // FLAC's predictor (trailing zeros are very predictable).
+        for drop_bits in [2, 4, 6, 8] {
+            let mask: i16 = !((1i16 << drop_bits) - 1);
+            let truncated: Vec<i16> = audio.samples.iter().map(|s| *s & mask).collect();
+            let flac_trunc = encode(SAMPLE_FLAC, channels, sample_rate, frame_count, &truncated)
+                .expect("truncated flac encode");
+            let effective_bits = 16 - drop_bits;
+            let pct = 100.0 * flac_trunc.len() as f64 / baseline.len() as f64;
+            println!(
+                "trunc to {}-bit: flac={}B, baseline={}B, ratio={:.1}%",
+                effective_bits,
+                flac_trunc.len(),
+                baseline.len(),
+                pct
+            );
+        }
+    }
 }

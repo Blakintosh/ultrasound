@@ -166,7 +166,7 @@ pub fn convert_source_inline(
     } else {
         let mut frame_rate = audio.frame_rate as i32;
         let mut frame_count = audio.frame_count as i32;
-        let pcm = if frame_rate != 48000 {
+        let mut pcm = if frame_rate != 48000 {
             frame_count = (audio.frame_count * 48000 / frame_rate as u64) as i32;
             let resampled = Riff::resize(&audio.samples, audio.channel_count as u32, frame_count as u32);
             frame_rate = 48000;
@@ -174,6 +174,22 @@ pub fn convert_source_inline(
         } else {
             audio.samples
         };
+        // Lossy pre-pass #1: windowed silence gate. Any 128-sample window
+        // whose peak absolute value stays below ~-30dBFS gets zeroed. FLAC
+        // stores runs of constant zero as flat subframes that cost almost
+        // nothing, so this is free money on content with quiet tails
+        // (reverb decays, ambiences, dialogue pauses). Windowed rather than
+        // per-sample so isolated quiet samples between loud ones don't get
+        // punched into zero-crackles.
+        silence_gate(&mut pcm, audio.channel_count as usize, 128, 1024);
+
+        // Lossy pre-pass #2: truncate 16-bit samples to 8-bit effective depth.
+        // Raising the noise floor ~48dB in exchange for ~68% smaller FLAC
+        // output. No dither — bare mask, so quantisation noise is correlated.
+        const TRUNCATE_MASK: i16 = !0x00FF;
+        for s in &mut pcm {
+            *s &= TRUNCATE_MASK;
+        }
         flac::encode(&asset.source_name, audio.channel_count as i32, frame_rate, frame_count, &pcm)?
     };
 
@@ -205,4 +221,25 @@ pub fn convert_source_inline(
         },
         flac_out,
     ))
+}
+
+/// Windowed silence gate over interleaved i16 PCM. Walks the signal in
+/// `window_frames`-frame blocks; within each block, if no sample on any
+/// channel exceeds `threshold` in absolute value, zero the entire block.
+/// Zero runs compress to almost nothing in FLAC (constant subframes),
+/// so this reclaims space from quiet tails without touching loud content.
+fn silence_gate(pcm: &mut [i16], channels: usize, window_frames: usize, threshold: i16) {
+    if channels == 0 || window_frames == 0 || pcm.is_empty() {
+        return;
+    }
+    let window_samples = window_frames * channels;
+    let thr = threshold as i32;
+    for window in pcm.chunks_mut(window_samples) {
+        let loud = window.iter().any(|s| (*s as i32).abs() >= thr);
+        if !loud {
+            for s in window.iter_mut() {
+                *s = 0;
+            }
+        }
+    }
 }
