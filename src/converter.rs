@@ -29,6 +29,50 @@ pub enum AssetFormat {
     SndAssetFormatFlac = 8
 }
 
+/// Per-asset lossy-compression budget. Picks a bit-depth truncation level
+/// and a silence-gate threshold. Lower tiers preserve more detail; higher
+/// tiers shrink the bank at the cost of noise floor and quiet tails.
+#[derive(Copy, Clone, Debug)]
+pub enum CompressionTier {
+    None,
+    Low,
+    Medium,
+    High,
+    Extreme,
+}
+
+impl CompressionTier {
+    /// Mask AND-ed with each i16 sample to discard low-order bits. `None`
+    /// leaves the sample untouched.
+    pub fn truncate_mask(self) -> i16 {
+        match self {
+            CompressionTier::None => !0x0000,
+            CompressionTier::Low => !0x0003,     // 14-bit
+            CompressionTier::Medium => !0x000F,  // 12-bit
+            CompressionTier::High => !0x003F,    // 10-bit
+            CompressionTier::Extreme => !0x00FF, //  8-bit
+        }
+    }
+
+    /// Silence-gate peak-amplitude threshold. Returns `None` for tiers that
+    /// skip the gate entirely. Scaled roughly to 4× the truncation step so
+    /// the gate only ever chops content that's already near or below the
+    /// quantisation noise floor.
+    pub fn silence_gate_threshold(self) -> Option<i16> {
+        match self {
+            CompressionTier::None => None,
+            CompressionTier::Low => Some(128),     // ~-48 dB
+            CompressionTier::Medium => Some(256),  // ~-42 dB
+            CompressionTier::High => Some(256),    // ~-42 dB
+            CompressionTier::Extreme => Some(1024),// ~-30 dB
+        }
+    }
+
+    /// Frame count per gate window. Fixed across tiers — 128 frames ≈
+    /// 2.7 ms at 48 kHz, the shortest "silence" worth detecting.
+    pub const GATE_WINDOW_FRAMES: usize = 128;
+}
+
 pub struct SoundAssetBankSourceAsset {
     pub source_name: String,
     pub looping: AliasLooping,
@@ -174,21 +218,28 @@ pub fn convert_source_inline(
         } else {
             audio.samples
         };
-        // Lossy pre-pass #1: windowed silence gate. Any 128-sample window
-        // whose peak absolute value stays below ~-30dBFS gets zeroed. FLAC
-        // stores runs of constant zero as flat subframes that cost almost
-        // nothing, so this is free money on content with quiet tails
-        // (reverb decays, ambiences, dialogue pauses). Windowed rather than
-        // per-sample so isolated quiet samples between loud ones don't get
-        // punched into zero-crackles.
-        silence_gate(&mut pcm, audio.channel_count as usize, 128, 1024);
+        // Lossy pre-passes driven by the current compression tier. Silence
+        // gate first (zero long quiet runs so FLAC encodes them as flat
+        // subframes), then bit-depth truncation (raises the noise floor
+        // but gives FLAC's predictor much smaller residuals to Rice-code).
+        // A single constant picks the tier for every asset in the build;
+        // later this will be driven per-alias.
+        const COMPRESSION_TIER: CompressionTier = CompressionTier::High;
 
-        // Lossy pre-pass #2: truncate 16-bit samples to 8-bit effective depth.
-        // Raising the noise floor ~48dB in exchange for ~68% smaller FLAC
-        // output. No dither — bare mask, so quantisation noise is correlated.
-        const TRUNCATE_MASK: i16 = !0x00FF;
-        for s in &mut pcm {
-            *s &= TRUNCATE_MASK;
+        if let Some(threshold) = COMPRESSION_TIER.silence_gate_threshold() {
+            silence_gate(
+                &mut pcm,
+                audio.channel_count as usize,
+                CompressionTier::GATE_WINDOW_FRAMES,
+                threshold,
+            );
+        }
+
+        let mask = COMPRESSION_TIER.truncate_mask();
+        if mask != !0 {
+            for s in &mut pcm {
+                *s &= mask;
+            }
         }
         flac::encode(&asset.source_name, audio.channel_count as i32, frame_rate, frame_count, &pcm)?
     };

@@ -101,8 +101,8 @@ impl SoundAssetBank {
             &bank_file.name,
             bank_file.converted_checksum,
             bank_file.source_checksum,
-            match bank_file.entry.format {                                                                                                                                                                                                                    
-                0 => AssetFormat::SndAssetFormatPcms16,                                                                                                                                                                                                                    
+            match bank_file.entry.format {
+                0 => AssetFormat::SndAssetFormatPcms16,
                 8 => AssetFormat::SndAssetFormatFlac,
                 other => return Err(format!("Unknown asset format: {}", other)),
             },
