@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 
 use rayon::prelude::*;
@@ -12,6 +11,7 @@ use crate::converter::{convert_source_inline, SoundAssetBankConvertedAsset};
 use crate::obtainer::SoundAssetObtainer;
 use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
+use crate::source_asset_cache::Checksum;
 use crate::string_hash;
 
 /// Build (or update) a bank file for one zone+platform+language+storage-class.
@@ -69,28 +69,24 @@ pub fn update_bank(
 
     // 2. Diff against zone's desired asset list.
     //
-    // An entry is considered stale if the source .wav's mtime is newer than
-    // the bank file's own mtime, meaning it was edited since the bank was
-    // last written. Stale entries get replaced (removed by hash + re-added
-    // by name). If the bank has no entries (first build), skip the stat
-    // guard entirely and treat everything as to_add.
+    // An entry is considered stale if hashing the current source file
+    // produces a checksum that differs from the one the bank recorded when
+    // it was last built. This catches both in-place edits AND alias swaps
+    // that repoint an existing alias at a different source file (mtime
+    // alone would miss the latter when the new source is older than the
+    // bank). Stale entries get replaced (removed by hash + re-added by
+    // name). On the first build the bank is empty and everything becomes
+    // to_add regardless.
     let desired_hashes: HashSet<u32> = source_map
         .keys()
         .map(|name| string_hash::hash(name))
         .collect();
 
-    let bank_mtime: Option<SystemTime> = if bank.get_files().is_empty() {
-        None
-    } else {
-        fs::metadata(&cache_path)
-            .and_then(|m| m.modified())
-            .ok()
-    };
-
-    let existing_hashes: HashSet<u32> = bank
+    // name_hash → stored source checksum from the existing bank.
+    let existing_checksums: HashMap<u32, Checksum> = bank
         .get_files()
         .iter()
-        .map(|f| { let h = f.entry.name; h })
+        .map(|f| (f.entry.name, f.source_checksum))
         .collect();
 
     let mut to_remove: HashSet<u32> = HashSet::new();
@@ -102,28 +98,43 @@ pub fn update_bank(
         }
     }
 
+    // Hash every desired source in parallel. Only read+hash — no decode.
+    // For sources whose checksum already matches the bank we skip entirely;
+    // the dominant cost here is the read, and it only applies to entries
+    // we would otherwise have walked past silently.
+    let desired_names: Vec<&String> = source_map.keys().collect();
+    let hashed: Vec<Result<(String, Checksum), String>> = desired_names
+        .par_iter()
+        .map(|name| {
+            let src = source_map
+                .get(*name)
+                .ok_or_else(|| format!("zone source lookup failed for '{}'", name))?;
+            let data = fs::read(&src.source_name)
+                .map_err(|e| format!("read {}: {}", src.source_name, e))?;
+            Ok(((*name).clone(), Checksum::from_data(&data)))
+        })
+        .collect();
+
+    let mut current_checksums: HashMap<String, Checksum> = HashMap::with_capacity(desired_names.len());
+    for r in hashed {
+        let (name, sum) = r?;
+        current_checksums.insert(name, sum);
+    }
+
     let mut to_add: HashSet<String> = HashSet::new();
     for name in source_map.keys() {
         let name_hash = string_hash::hash(name);
-        let in_bank = existing_hashes.contains(&name_hash);
-        if !in_bank {
-            to_add.insert(name.clone());
-            continue;
-        }
-        // Entry exists in the bank — check staleness by source mtime.
-        let Some(bank_t) = bank_mtime else {
-            // Bank had entries but we couldn't stat it; safest is to reconvert.
-            to_remove.insert(name_hash);
-            to_add.insert(name.clone());
-            continue;
-        };
-        let Some(src) = source_map.get(name) else { continue };
-        let src_t = fs::metadata(&src.source_name)
-            .and_then(|m| m.modified())
-            .unwrap_or(UNIX_EPOCH);
-        if src_t > bank_t {
-            to_remove.insert(name_hash);
-            to_add.insert(name.clone());
+        let current = current_checksums.get(name).copied();
+        match existing_checksums.get(&name_hash) {
+            None => {
+                to_add.insert(name.clone());
+            }
+            Some(stored) => {
+                if current.map(|c| c != *stored).unwrap_or(true) {
+                    to_remove.insert(name_hash);
+                    to_add.insert(name.clone());
+                }
+            }
         }
     }
 

@@ -146,6 +146,40 @@ extern "C" fn enc_write_callback(
       0
   }
 
+// -- STREAMINFO parser ------------------------------------------------------
+
+struct StreamInfo {
+    sample_rate: u32,
+    channels: u32,
+    bits_per_sample: u32,
+    total_samples: u64,
+}
+
+fn parse_streaminfo(source_name: &str, data: &[u8]) -> Result<StreamInfo, String> {
+    if data.len() < 4 + 4 + 34 || &data[..4] != b"fLaC" {
+        return Err(format!("Not a FLAC file: {}", source_name));
+    }
+    // Block header at data[4..8]: bit 0 = last-flag, bits 1..7 = type, then 24-bit length.
+    let block_type = data[4] & 0x7F;
+    if block_type != 0 {
+        return Err(format!("First metadata block is not STREAMINFO in {}", source_name));
+    }
+    let body = &data[8..8 + 34];
+
+    let sample_rate = ((body[10] as u32) << 12)
+        | ((body[11] as u32) << 4)
+        | ((body[12] as u32) >> 4);
+    let channels = (((body[12] >> 1) & 0x07) as u32) + 1;
+    let bits_per_sample = ((((body[12] & 0x01) << 4) | ((body[13] >> 4) & 0x0F)) as u32) + 1;
+    let total_samples = (((body[13] & 0x0F) as u64) << 32)
+        | ((body[14] as u64) << 24)
+        | ((body[15] as u64) << 16)
+        | ((body[16] as u64) << 8)
+        | (body[17] as u64);
+
+    Ok(StreamInfo { sample_rate, channels, bits_per_sample, total_samples })
+}
+
 // -- Decoder callbacks ------------------------------------------------------
 
 struct DecodeState {
@@ -241,7 +275,7 @@ pub fn encode(source_name: &str, channel_count: i32, sample_rate: i32, frame_cou
             return Err(format!("Failed to create FLAC encoder for {}", source_name));
         }
 
-        let compression_level = if cfg!(feature = "flac_hifi") { 5 } else { 16 };
+        let compression_level = if cfg!(feature = "flac_hifi") { 5 } else { 8 };
 
         FLAC__stream_encoder_set_compression_level(encoder.ptr, compression_level);
         FLAC__stream_encoder_set_bits_per_sample(encoder.ptr, 16);
@@ -323,11 +357,14 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
             ));
         }
 
-        // Read stream properties after init (available once streaminfo is parsed).
-        state.sample_rate = FLAC__stream_decoder_get_sample_rate(decoder.ptr);
-        state.channels = FLAC__stream_decoder_get_channels(decoder.ptr);
-        state.bits_per_sample = FLAC__stream_decoder_get_bits_per_sample(decoder.ptr);
-        state.total_samples = FLAC__stream_decoder_get_total_samples(decoder.ptr);
+        // Parse STREAMINFO directly from the file bytes. The libFLAC getters are
+        // unreliable here (they returned 0 in practice), and reading the metadata
+        // callback's struct cross-FFI is fragile due to union alignment.
+        let info = parse_streaminfo(source_name, data)?;
+        state.sample_rate = info.sample_rate;
+        state.channels = info.channels;
+        state.bits_per_sample = info.bits_per_sample;
+        state.total_samples = info.total_samples;
 
         if state.bits_per_sample != 16 {
             FLAC__stream_decoder_finish(decoder.ptr);
@@ -359,5 +396,35 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
             channel_count: state.channels as u16,
             frame_count,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_FLAC: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/zm_kar_roundend_normal.flac");
+
+    #[test]
+    fn parse_streaminfo_reads_real_file() {
+        let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present in repo root");
+        let info = parse_streaminfo(SAMPLE_FLAC, &data).expect("streaminfo parses");
+        assert_eq!(info.bits_per_sample, 16, "expected 16-bit source");
+        assert!(info.channels >= 1 && info.channels <= 2);
+        assert!(info.sample_rate > 0);
+        assert!(info.total_samples > 0);
+    }
+
+    #[test]
+    fn decode_real_file_produces_samples() {
+        let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present in repo root");
+        let audio = decode(SAMPLE_FLAC, &data).expect("decode succeeds");
+        assert!(audio.frame_rate > 0);
+        assert!(audio.channel_count >= 1 && audio.channel_count <= 2);
+        assert!(audio.frame_count > 0);
+        assert_eq!(
+            audio.samples.len(),
+            audio.frame_count as usize * audio.channel_count as usize
+        );
     }
 }

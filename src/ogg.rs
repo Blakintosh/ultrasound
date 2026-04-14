@@ -29,3 +29,23 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
         frame_count,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_OGG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/zm_kar_roundstart_normal.ogg");
+
+    #[test]
+    fn decode_real_file_produces_samples() {
+        let data = std::fs::read(SAMPLE_OGG).expect("sample ogg present in repo root");
+        let audio = decode(SAMPLE_OGG, &data).expect("decode succeeds");
+        assert!(audio.frame_rate > 0);
+        assert!(audio.channel_count >= 1 && audio.channel_count <= 2);
+        assert!(audio.frame_count > 0);
+        assert_eq!(
+            audio.samples.len(),
+            audio.frame_count as usize * audio.channel_count as usize
+        );
+    }
+}

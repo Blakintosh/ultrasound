@@ -4,6 +4,12 @@ Less noise, more sound. A part of the gscode ecosystem.
 
 Ultrasound is a drop-in replacement for the Black Ops III Mod Tools' snd_convert. Built from the ground up in Rust, Ultrasound fixes long-standing snd_convert bugs and delivers massive speed improvements over its predecessor. 
 
+### Additional features
+
+* Supports converting non-48k WAV files, including with correct resampling.
+* Support for direct FLAC format.
+* Support for OGG format.
+
 ## Installation
 
 Navigate to the [Releases](https://github.com/Blakintosh/ultrasound/releases) tab to download the latest release. From here, the `README.md` inside the release will guide you through the installation process.
@@ -27,7 +33,7 @@ Ultrasound: ~6.5s (~8x faster)
 
 ```
 Baseline (snd_convert): ~19.9s
-Ultrasound: ~0.6s (~33x faster)
+Ultrasound: ~1.1s (~18x faster)
 ```
 
 Your mileage may vary.
