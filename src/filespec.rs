@@ -70,11 +70,15 @@ pub fn expand(
     Ok(out)
 }
 
-/// If `full` is a .wav file, return [full]. If it's a directory, return every
-/// `*.wav` inside it (non-recursive). Otherwise, empty.
+fn is_supported_audio_ext(ext: Option<&str>) -> bool {
+    matches!(ext, Some("wav") | Some("flac"))
+}
+
+/// If `full` is a supported audio file, return [full]. If it's a directory,
+/// return every supported audio file inside it (non-recursive). Otherwise, empty.
 fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     if full.is_file() {
-        if full.extension().and_then(|s| s.to_str()) == Some("wav") {
+        if is_supported_audio_ext(full.extension().and_then(|s| s.to_str())) {
             return Ok(vec![full.to_path_buf()]);
         }
         return Ok(Vec::new());
@@ -88,7 +92,7 @@ fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     {
         let entry = entry.map_err(|e| format!("read_dir entry error: {}", e))?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("wav") {
+        if is_supported_audio_ext(path.extension().and_then(|s| s.to_str())) {
             if path.to_string_lossy().contains(' ') {
                 return Err(format!(
                     "filename contains a space: {}",

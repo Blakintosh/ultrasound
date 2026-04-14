@@ -4,6 +4,7 @@ mod env;
 mod tables;
 mod riff;
 mod flac;
+mod decoded_audio;
 mod units;
 mod converter;
 mod source_asset_cache;

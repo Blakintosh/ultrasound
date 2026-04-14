@@ -1,4 +1,4 @@
-use crate::{riff::Riff, units::linear_to_db_spl};
+use crate::units::linear_to_db_spl;
 
 pub struct AssetEnvelope {
     pub left: Vec<f64>,
@@ -8,8 +8,8 @@ pub struct AssetEnvelope {
 const ENVELOPE_BUCKET_SIZE: usize = 512;
 
 impl AssetEnvelope {
-    pub fn envelope_extract(riff: &Riff, samples: &[i16]) -> AssetEnvelope {
-        let bucket_count = (riff.frame_count / ENVELOPE_BUCKET_SIZE as u64) as usize;
+    pub fn envelope_extract(frame_count: u64, channel_count: u16, samples: &[i16]) -> AssetEnvelope {
+        let bucket_count = (frame_count / ENVELOPE_BUCKET_SIZE as u64) as usize;
 
         // If at or below bucket size, return a more basic envelope.
         if bucket_count <= 1 {
@@ -31,9 +31,9 @@ impl AssetEnvelope {
         for i in 0..bucket_count {
             let base_offset = i * ENVELOPE_BUCKET_SIZE;
 
-            for j in 0..riff.channel_count as usize {
+            for j in 0..channel_count as usize {
                 for k in 0..ENVELOPE_BUCKET_SIZE {
-                    let read_offset = (base_offset + k) * riff.channel_count as usize + j;
+                    let read_offset = (base_offset + k) * channel_count as usize + j;
                     buckets[i] = buckets[i].max((samples[read_offset] as f64).abs());
                 }
             }

@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, fs::{self, Metadata}, time::UNIX_EPOCH};
+use std::{collections::{HashMap, HashSet}, fs::{self, Metadata}, path::Path, time::UNIX_EPOCH};
 use md5::{Md5, Digest};
 use rayon::prelude::*;
 
-use crate::{asset_types::AssetEnvelope, bank::bank_entry::BankEntry, riff::Riff};
+use crate::{asset_types::AssetEnvelope, bank::bank_entry::BankEntry, decoded_audio::DecodedAudio, flac, riff::Riff};
 
 pub struct SourceAssetCache {
     assets: HashMap<String, SourceAsset>
@@ -137,33 +137,51 @@ impl SourceAsset {
             .map_err(|e| format!("Failed to read file {}: {}", file_name, e))?;
         let hash = Checksum::from_data(&data);
 
-        let riff = Riff::parse(file_name, &data)?;
+        let is_flac = Path::new(file_name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("flac"))
+            .unwrap_or(false);
 
-        if riff.format != 1 && riff.format != 65534 {
-            return Err(format!("Unsupported audio format in {}: {}", file_name, riff.format));
+        let audio = if is_flac {
+            let decoded = flac::decode(file_name, &data)?;
+            drop(data);
+            decoded
+        } else {
+            let riff = Riff::parse(file_name, &data)?;
+
+            if riff.format != 1 && riff.format != 65534 {
+                return Err(format!("Unsupported audio format in {}: {}", file_name, riff.format));
+            }
+            if riff.frame_size / riff.channel_count != 2 {
+                return Err(format!("Unsupported bit depth (requires 16-bit) in {}: {}", file_name, riff.frame_size * 8 / riff.channel_count));
+            }
+
+            let samples = riff.decode_interleaved_s16_from_slice(&data)?;
+            drop(data);
+
+            DecodedAudio {
+                samples,
+                frame_rate: riff.frame_rate,
+                channel_count: riff.channel_count,
+                frame_count: riff.frame_count,
+            }
+        };
+
+        if BankEntry::lookup_frame_rate_index(audio.frame_rate as i32) == u8::MAX {
+            return Err(format!("Unsupported sample rate in {}: {}", file_name, audio.frame_rate));
+        }
+        if audio.channel_count > 2 {
+            return Err(format!("Unsupported channel count (requires 1-2 channels) in {}: {}", file_name, audio.channel_count));
         }
 
-        if BankEntry::lookup_frame_rate_index(riff.frame_rate as i32) == u8::MAX {
-            return Err(format!("Unsupported sample rate in {}: {}", file_name, riff.frame_rate));
-        }
-
-        if riff.frame_size / riff.channel_count != 2 {
-            return Err(format!("Unsupported bit depth (requires 16-bit) in {}: {}", file_name, riff.frame_size * 8 / riff.channel_count));
-        }
-
-        if riff.channel_count > 2 {
-            return Err(format!("Unsupported channel count (requires 1-2 channels) in {}: {}", file_name, riff.channel_count));
-        }
-
-        let samples = riff.decode_interleaved_s16_from_slice(&data)?;
-        drop(data);
-        let asset_envelope = AssetEnvelope::envelope_extract(&riff, &samples);
+        let asset_envelope = AssetEnvelope::envelope_extract(audio.frame_count, audio.channel_count, &audio.samples);
 
         Ok(SourceAsset {
             name: file_name.to_string(),
-            frame_rate: riff.frame_rate as i32,
-            frame_count: riff.frame_count,
-            channel_count: riff.channel_count as i32,
+            frame_rate: audio.frame_rate as i32,
+            frame_count: audio.frame_count,
+            channel_count: audio.channel_count as i32,
             hash,
             time: metadata.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0),
             envelope_loudness0: (1.0 * asset_envelope.left[0]) as u8,
