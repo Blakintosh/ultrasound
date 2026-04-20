@@ -1,25 +1,25 @@
 use clap::Parser;
 
-mod env;
-mod tables;
-mod riff;
-mod flac;
-mod ogg;
-mod decoded_audio;
-mod units;
-mod converter;
-mod source_asset_cache;
 mod asset_types;
 mod bank;
-mod string_hash;
-mod obtainer;
 mod converted_asset_cache;
-mod sound_zone_config;
+mod converter;
+mod decoded_audio;
 mod duk;
-mod music;
-mod sound_data_snapshot;
+mod env;
 mod filespec;
+mod flac;
+mod music;
+mod obtainer;
+mod ogg;
+mod riff;
+mod sound_data_snapshot;
 mod sound_zone;
+mod sound_zone_config;
+mod source_asset_cache;
+mod string_hash;
+mod tables;
+mod units;
 mod update_bank;
 
 use env::Env;
@@ -39,24 +39,34 @@ struct Args {
     skip_deps: bool,
 
     /// Raw positional arguments from mod tools
-    raw_args: Vec<String>
+    raw_args: Vec<String>,
 }
 
 enum Action {
-    ZoneSources { platform: String, languages: Vec<String>, zones: Vec<String> },
-    SoundZone { zone: String, platform: String, languages: Vec<String> },
-    Production { platform: String, language: String },
+    ZoneSources {
+        platform: String,
+        languages: Vec<String>,
+        zones: Vec<String>,
+    },
+    SoundZone {
+        zone: String,
+        platform: String,
+        languages: Vec<String>,
+    },
+    Production {
+        platform: String,
+        language: String,
+    },
     All,
 }
 
 fn main() {
     let args = Args::parse();
 
-    let env = Env::new(&args.raw_args[1], &args.raw_args[4])
-        .expect("Failed to initialize environment");
+    let env =
+        Env::new(&args.raw_args[1], &args.raw_args[4]).expect("Failed to initialize environment");
 
-    let mut snapshot = SoundDataSnapshot::new(env)
-        .expect("Failed to build sound data snapshot");
+    let mut snapshot = SoundDataSnapshot::new(env).expect("Failed to build sound data snapshot");
 
     let action = parse_action(&snapshot, &args.raw_args).expect("Failed to parse action");
 
@@ -68,12 +78,20 @@ fn main() {
 
 fn run(snapshot: &mut SoundDataSnapshot, action: Action) -> Result<(), String> {
     match action {
-        Action::SoundZone { zone, platform, languages } => {
+        Action::SoundZone {
+            zone,
+            platform,
+            languages,
+        } => {
             for lang in &languages {
                 single_zone(snapshot, &zone, &platform, lang)?;
             }
         }
-        Action::ZoneSources { platform, languages, zones } => {
+        Action::ZoneSources {
+            platform,
+            languages,
+            zones,
+        } => {
             for zone in &zones {
                 for lang in &languages {
                     single_zone(snapshot, zone, &platform, lang)?;
@@ -81,7 +99,10 @@ fn run(snapshot: &mut SoundDataSnapshot, action: Action) -> Result<(), String> {
             }
         }
         Action::Production { platform, language } => {
-            println!("Production not yet supported (platform={}, language={})", platform, language);
+            println!(
+                "Production not yet supported (platform={}, language={})",
+                platform, language
+            );
         }
         Action::All => {
             println!("'all' action not yet supported");
@@ -135,7 +156,8 @@ fn parse_action(snapshot: &SoundDataSnapshot, raw: &[String]) -> Result<Action, 
 
     match raw[3].as_str() {
         "zone_source" | "zone_sources" => {
-            let locale_names: Vec<&str> = snapshot.locales.iter().map(|l| l.name.as_str()).collect();
+            let locale_names: Vec<&str> =
+                snapshot.locales.iter().map(|l| l.name.as_str()).collect();
 
             let mut languages = Vec::new();
             let mut zones = Vec::new();

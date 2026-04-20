@@ -1,9 +1,9 @@
-pub mod row_locale;
-pub mod row_platform;
-pub mod row_ambient;
-pub mod row_reverb;
 pub mod alias_enums;
 pub mod row_alias;
+pub mod row_ambient;
+pub mod row_locale;
+pub mod row_platform;
+pub mod row_reverb;
 
 use std::fmt::Display;
 use std::path::Path;
@@ -14,11 +14,18 @@ pub trait Row {
 }
 
 pub fn load_table<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> Result<Vec<T>, String> {
-    let mut reader = csv::Reader::from_path(path).map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
+    let mut reader = csv::Reader::from_path(path)
+        .map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
 
     let mut rows = Vec::new();
     for result in reader.deserialize() {
-        let row = result.map_err(|e| format!("Failed to deserialize row in file {}: {}", path.display(), e))?;
+        let row = result.map_err(|e| {
+            format!(
+                "Failed to deserialize row in file {}: {}",
+                path.display(),
+                e
+            )
+        })?;
         rows.push(row);
     }
     Ok(rows)
@@ -27,7 +34,9 @@ pub fn load_table<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> Result<Ve
 /// Like `load_table` but tolerant of comment lines (starting with `#`),
 /// trailing commas, and whitespace around values. Needed for files like the
 /// alias CSVs that have section comments and varying column counts.
-pub fn load_table_relaxed<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> Result<Vec<T>, String> {
+pub fn load_table_relaxed<T: for<'de> serde::Deserialize<'de>>(
+    path: &Path,
+) -> Result<Vec<T>, String> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .comment(Some(b'#'))
@@ -48,7 +57,8 @@ pub fn load_table_relaxed<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> R
 
     let mut rows = Vec::new();
     for result in reader.records() {
-        let mut record = result.map_err(|e| format!("Failed to read row in file {}: {}", path.display(), e))?;
+        let mut record =
+            result.map_err(|e| format!("Failed to read row in file {}: {}", path.display(), e))?;
 
         // Skip comment rows. The csv crate's built-in comment option only
         // catches records where `#` is literally the first byte, so it misses
@@ -61,22 +71,30 @@ pub fn load_table_relaxed<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> R
         while record.len() < header_len {
             record.push_field("");
         }
-        let row: T = record
-            .deserialize(Some(&headers))
-            .map_err(|e| format!("Failed to deserialize row in file {}: {}", path.display(), e))?;
+        let row: T = record.deserialize(Some(&headers)).map_err(|e| {
+            format!(
+                "Failed to deserialize row in file {}: {}",
+                path.display(),
+                e
+            )
+        })?;
         rows.push(row);
     }
     Ok(rows)
 }
 
-pub fn bool_from_string<'de, D>(deserializer: D) -> Result<bool, D::Error>                                                      
-where                                                                                                                       
+pub fn bool_from_string<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
     D: serde::Deserializer<'de>,
 {
     let s: &str = serde::Deserialize::deserialize(deserializer)?;
     if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes") || s == "1" {
         Ok(true)
-    } else if s.eq_ignore_ascii_case("false") || s.eq_ignore_ascii_case("no") || s == "0" || s.is_empty() {
+    } else if s.eq_ignore_ascii_case("false")
+        || s.eq_ignore_ascii_case("no")
+        || s == "0"
+        || s.is_empty()
+    {
         Ok(false)
     } else {
         Err(serde::de::Error::custom(format!("invalid bool: {}", s)))
@@ -105,7 +123,10 @@ where
     if let Ok(f) = s.parse::<f64>() {
         return Ok(Some(T::from_f64(f)));
     }
-    Err(serde::de::Error::custom(format!("unparseable numeric value: {}", s)))
+    Err(serde::de::Error::custom(format!(
+        "unparseable numeric value: {}",
+        s
+    )))
 }
 
 /// Helper trait so `empty_as_none` can coerce an f64 fallback into the target

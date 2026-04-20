@@ -30,7 +30,9 @@ impl<'a> SoundAssetBankObtainer<'a> {
 
 impl<'a> SoundAssetObtainer for SoundAssetBankObtainer<'a> {
     fn get_asset(&mut self, name: &str) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
-        let bank_idx = *self.index.get(name)
+        let bank_idx = *self
+            .index
+            .get(name)
             .ok_or_else(|| format!("Asset {} not found in any bank", name))?;
         self.banks[bank_idx].get_asset(name)
     }

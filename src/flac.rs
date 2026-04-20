@@ -31,17 +31,11 @@ type FlacDecWriteCallback = extern "C" fn(
     client_data: *mut c_void,
 ) -> i32;
 
-type FlacDecErrorCallback = extern "C" fn(
-    decoder: *mut c_void,
-    status: i32,
-    client_data: *mut c_void,
-);
+type FlacDecErrorCallback =
+    extern "C" fn(decoder: *mut c_void, status: i32, client_data: *mut c_void);
 
-type FlacDecMetadataCallback = extern "C" fn(
-    decoder: *mut c_void,
-    metadata: *const c_void,
-    client_data: *mut c_void,
-);
+type FlacDecMetadataCallback =
+    extern "C" fn(decoder: *mut c_void, metadata: *const c_void, client_data: *mut c_void);
 
 // -- Minimal FLAC frame header for the write callback -----------------------
 
@@ -74,11 +68,32 @@ unsafe extern "C" {
     unsafe fn FLAC__stream_encoder_set_sample_rate(encoder: *mut c_void, sample_rate: u32) -> i32;
     unsafe fn FLAC__stream_encoder_set_compression_level(encoder: *mut c_void, level: u32) -> i32;
     unsafe fn FLAC__stream_encoder_set_blocksize(encoder: *mut c_void, blocksize: u32) -> i32;
-    unsafe fn FLAC__stream_encoder_set_do_mid_side_stereo(encoder: *mut c_void, do_mid_side_stereo: i32) -> i32;
-    unsafe fn FLAC__stream_encoder_set_total_samples_estimate(encoder: *mut c_void, total_samples_estimate: u64) -> i32;
-    unsafe fn FLAC__stream_encoder_set_metadata(encoder: *mut c_void, metadata: *mut c_void, num_blocks: u32) -> i32;
-    unsafe fn FLAC__stream_encoder_init_stream(encoder: *mut c_void, write_callback: FlacEncWriteCallback, seek_callback: *const c_void, tell_callback: *const c_void, metadata_callback: *const c_void, client_data: *mut c_void) -> i32;
-    unsafe fn FLAC__stream_encoder_process_interleaved(encoder: *mut c_void, buffer: *const i32, samples: u32) -> i32;
+    unsafe fn FLAC__stream_encoder_set_do_mid_side_stereo(
+        encoder: *mut c_void,
+        do_mid_side_stereo: i32,
+    ) -> i32;
+    unsafe fn FLAC__stream_encoder_set_total_samples_estimate(
+        encoder: *mut c_void,
+        total_samples_estimate: u64,
+    ) -> i32;
+    unsafe fn FLAC__stream_encoder_set_metadata(
+        encoder: *mut c_void,
+        metadata: *mut c_void,
+        num_blocks: u32,
+    ) -> i32;
+    unsafe fn FLAC__stream_encoder_init_stream(
+        encoder: *mut c_void,
+        write_callback: FlacEncWriteCallback,
+        seek_callback: *const c_void,
+        tell_callback: *const c_void,
+        metadata_callback: *const c_void,
+        client_data: *mut c_void,
+    ) -> i32;
+    unsafe fn FLAC__stream_encoder_process_interleaved(
+        encoder: *mut c_void,
+        buffer: *const i32,
+        samples: u32,
+    ) -> i32;
     unsafe fn FLAC__stream_encoder_finish(encoder: *mut c_void) -> i32;
 
     // Decoder
@@ -131,20 +146,20 @@ impl Drop for FlacDecoder {
 // -- Encoder callbacks ------------------------------------------------------
 
 extern "C" fn enc_write_callback(
-      _encoder: *mut c_void,
-      buffer: *const u8,
-      bytes: usize,
-      _samples: u32,
-      _current_frame: u32,
-      client_data: *mut c_void,
-  ) -> i32 {
-      unsafe {
-          let output = &mut *(client_data as *mut Vec<u8>);
-          let slice = std::slice::from_raw_parts(buffer, bytes);
-          output.extend_from_slice(slice);
-      }
-      0
-  }
+    _encoder: *mut c_void,
+    buffer: *const u8,
+    bytes: usize,
+    _samples: u32,
+    _current_frame: u32,
+    client_data: *mut c_void,
+) -> i32 {
+    unsafe {
+        let output = &mut *(client_data as *mut Vec<u8>);
+        let slice = std::slice::from_raw_parts(buffer, bytes);
+        output.extend_from_slice(slice);
+    }
+    0
+}
 
 // -- STREAMINFO parser ------------------------------------------------------
 
@@ -162,13 +177,15 @@ fn parse_streaminfo(source_name: &str, data: &[u8]) -> Result<StreamInfo, String
     // Block header at data[4..8]: bit 0 = last-flag, bits 1..7 = type, then 24-bit length.
     let block_type = data[4] & 0x7F;
     if block_type != 0 {
-        return Err(format!("First metadata block is not STREAMINFO in {}", source_name));
+        return Err(format!(
+            "First metadata block is not STREAMINFO in {}",
+            source_name
+        ));
     }
     let body = &data[8..8 + 34];
 
-    let sample_rate = ((body[10] as u32) << 12)
-        | ((body[11] as u32) << 4)
-        | ((body[12] as u32) >> 4);
+    let sample_rate =
+        ((body[10] as u32) << 12) | ((body[11] as u32) << 4) | ((body[12] as u32) >> 4);
     let channels = (((body[12] >> 1) & 0x07) as u32) + 1;
     let bits_per_sample = ((((body[12] & 0x01) << 4) | ((body[13] >> 4) & 0x0F)) as u32) + 1;
     let total_samples = (((body[13] & 0x0F) as u64) << 32)
@@ -177,7 +194,12 @@ fn parse_streaminfo(source_name: &str, data: &[u8]) -> Result<StreamInfo, String
         | ((body[16] as u64) << 8)
         | (body[17] as u64);
 
-    Ok(StreamInfo { sample_rate, channels, bits_per_sample, total_samples })
+    Ok(StreamInfo {
+        sample_rate,
+        channels,
+        bits_per_sample,
+        total_samples,
+    })
 }
 
 // -- Decoder callbacks ------------------------------------------------------
@@ -248,11 +270,7 @@ extern "C" fn dec_metadata_callback(
     // We read metadata via getter functions after init, nothing to do here.
 }
 
-extern "C" fn dec_error_callback(
-    _decoder: *mut c_void,
-    status: i32,
-    client_data: *mut c_void,
-) {
+extern "C" fn dec_error_callback(_decoder: *mut c_void, status: i32, client_data: *mut c_void) {
     unsafe {
         let state = &mut *(client_data as *mut DecodeState);
         if state.error.is_none() {
@@ -261,14 +279,20 @@ extern "C" fn dec_error_callback(
     }
 }
 
-pub fn encode(source_name: &str, channel_count: i32, sample_rate: i32, frame_count: i32, pcm_data: &[i16]) -> Result<Vec<u8>, String> {
+pub fn encode(
+    source_name: &str,
+    channel_count: i32,
+    sample_rate: i32,
+    frame_count: i32,
+    pcm_data: &[i16],
+) -> Result<Vec<u8>, String> {
     let total_samples = frame_count * channel_count;
 
     let mask = if cfg!(feature = "flac_hifi") { !0 } else { !1 };
 
     unsafe {
         let encoder = FlacEncoder {
-            ptr: FLAC__stream_encoder_new()
+            ptr: FLAC__stream_encoder_new(),
         };
 
         if encoder.ptr.is_null() {
@@ -299,13 +323,21 @@ pub fn encode(source_name: &str, channel_count: i32, sample_rate: i32, frame_cou
         );
 
         if init_result != 0 {
-            return Err(format!("Failed to initialize FLAC encoder: error code {}", init_result));
+            return Err(format!(
+                "Failed to initialize FLAC encoder: error code {}",
+                init_result
+            ));
         }
 
         // Convert 16-bit samples to 32-bit for libFLAC
         let samples_32: Vec<i32> = pcm_data.iter().map(|&s| (s & mask) as i32).collect();
 
-        if FLAC__stream_encoder_process_interleaved(encoder.ptr, samples_32.as_ptr(), frame_count as u32) == 0 {
+        if FLAC__stream_encoder_process_interleaved(
+            encoder.ptr,
+            samples_32.as_ptr(),
+            frame_count as u32,
+        ) == 0
+        {
             return Err("Failed to encode FLAC data".to_string());
         }
 
@@ -340,10 +372,10 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
         let init_result = FLAC__stream_decoder_init_stream(
             decoder.ptr,
             dec_read_callback,
-            std::ptr::null(),   // seek
-            std::ptr::null(),   // tell
-            std::ptr::null(),   // length
-            std::ptr::null(),   // eof
+            std::ptr::null(), // seek
+            std::ptr::null(), // tell
+            std::ptr::null(), // length
+            std::ptr::null(), // eof
             dec_write_callback,
             dec_metadata_callback,
             dec_error_callback,
@@ -376,10 +408,11 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
 
         if FLAC__stream_decoder_process_until_end_of_stream(decoder.ptr) == 0 {
             FLAC__stream_decoder_finish(decoder.ptr);
-            let msg = state
-                .error
-                .unwrap_or_else(|| "unknown error".to_string());
-            return Err(format!("Failed to decode FLAC data in {}: {}", source_name, msg));
+            let msg = state.error.unwrap_or_else(|| "unknown error".to_string());
+            return Err(format!(
+                "Failed to decode FLAC data in {}: {}",
+                source_name, msg
+            ));
         }
 
         FLAC__stream_decoder_finish(decoder.ptr);
@@ -403,7 +436,10 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_FLAC: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/zm_kar_roundend_normal.flac");
+    const SAMPLE_FLAC: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_data/zm_kar_roundend_normal.flac"
+    );
 
     #[test]
     fn parse_streaminfo_reads_real_file() {
@@ -435,10 +471,10 @@ mod tests {
     ///   cargo test --release lossy_prepass_shrinks_flac -- --nocapture
     #[test]
     fn lossy_prepass_shrinks_flac() {
+        use lewton::inside_ogg::OggStreamReader;
         use std::io::Cursor;
         use std::num::{NonZeroU8, NonZeroU32};
-        use lewton::inside_ogg::OggStreamReader;
-        use vorbis_rs::{VorbisEncoderBuilder, VorbisBitrateManagementStrategy};
+        use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoderBuilder};
 
         let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present");
         let audio = decode(SAMPLE_FLAC, &data).expect("flac decodes");
@@ -447,8 +483,14 @@ mod tests {
         let frame_count = audio.frame_count as i32;
 
         // Baseline: encode the raw PCM straight to FLAC at our normal level.
-        let baseline = encode(SAMPLE_FLAC, channels, sample_rate, frame_count, &audio.samples)
-            .expect("baseline flac encode");
+        let baseline = encode(
+            SAMPLE_FLAC,
+            channels,
+            sample_rate,
+            frame_count,
+            &audio.samples,
+        )
+        .expect("baseline flac encode");
 
         // Split interleaved i16 → per-channel f32 in [-1, 1] for vorbis_rs.
         let ch = channels as usize;
@@ -481,8 +523,7 @@ mod tests {
             }
 
             // Decode the OGG back to interleaved i16 with lewton.
-            let mut reader = OggStreamReader::new(Cursor::new(&ogg_bytes))
-                .expect("ogg reader");
+            let mut reader = OggStreamReader::new(Cursor::new(&ogg_bytes)).expect("ogg reader");
             let mut round_trip: Vec<i16> = Vec::with_capacity(audio.samples.len());
             while let Some(packet) = reader.read_dec_packet_itl().expect("ogg packet") {
                 round_trip.extend_from_slice(&packet);

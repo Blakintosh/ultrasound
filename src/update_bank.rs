@@ -2,17 +2,28 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
-
 use rayon::prelude::*;
 
 use crate::bank::bank_header::BankHeader;
 use crate::bank::sound_asset_bank::SoundAssetBank;
-use crate::converter::{convert_source_inline, SoundAssetBankConvertedAsset};
+use crate::converter::{
+    CompressionLevel, SoundAssetBankConvertedAsset, SoundAssetBankSourceAsset,
+    convert_source_inline,
+};
 use crate::obtainer::SoundAssetObtainer;
 use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
 use crate::source_asset_cache::Checksum;
 use crate::string_hash;
+
+/// Soft cap on a loaded bank (`.sabl`). Exact engine limit is unknown;
+/// 600 MB is a conservative guess used only to surface a warning.
+const SABL_LIMIT_BYTES: u64 = 600 * 1_000 * 1_000;
+/// Soft cap on a streamed bank (`.sabs`). Exact engine limit is unknown.
+const SABS_LIMIT_BYTES: u64 = 4 * 1_000 * 1_000 * 1_000;
+/// Percent-of-limit at which we print a warning with a compression-tuning
+/// hint.
+const BANK_WARN_THRESHOLD_PCT: u64 = 85;
 
 /// Build (or update) a bank file for one zone+platform+language+storage-class.
 /// Runs once for the loaded bank (`streamed=false`, `.sabl`) and once for the
@@ -101,7 +112,10 @@ pub fn update_bank(
     // Hash every desired source in parallel. Only read+hash — no decode.
     // For sources whose checksum already matches the bank we skip entirely;
     // the dominant cost here is the read, and it only applies to entries
-    // we would otherwise have walked past silently.
+    // we would otherwise have walked past silently. The hash mixes in the
+    // asset's compression-level fingerprint so retuning a level — or
+    // reassigning an alias to a different level — invalidates the bank
+    // entry even when the source file bytes are unchanged.
     let desired_names: Vec<&String> = source_map.keys().collect();
     let hashed: Vec<Result<(String, Checksum), String>> = desired_names
         .par_iter()
@@ -111,11 +125,16 @@ pub fn update_bank(
                 .ok_or_else(|| format!("zone source lookup failed for '{}'", name))?;
             let data = fs::read(&src.source_name)
                 .map_err(|e| format!("read {}: {}", src.source_name, e))?;
-            Ok(((*name).clone(), Checksum::from_data(&data)))
+            let fingerprint = src.compression_level.recipe_fingerprint();
+            Ok((
+                (*name).clone(),
+                Checksum::from_data_with_recipe(&data, &fingerprint),
+            ))
         })
         .collect();
 
-    let mut current_checksums: HashMap<String, Checksum> = HashMap::with_capacity(desired_names.len());
+    let mut current_checksums: HashMap<String, Checksum> =
+        HashMap::with_capacity(desired_names.len());
     for r in hashed {
         let (name, sum) = r?;
         current_checksums.insert(name, sum);
@@ -142,11 +161,15 @@ pub fn update_bank(
         println!("  {}.{}: up to date", base_name, ext);
         // Still deploy in case the ship copy is missing.
         deploy(&cache_path, &ship_path)?;
+        check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
         return Ok(());
     }
     println!(
         "  {}.{}: +{} / -{}",
-        base_name, ext, to_add.len(), to_remove.len()
+        base_name,
+        ext,
+        to_add.len(),
+        to_remove.len()
     );
 
     // 3. One-shot parallel convert: each worker does fs::read → RIFF parse →
@@ -175,6 +198,58 @@ pub fn update_bank(
 
     // 4. Deploy cache → ship.
     deploy(&cache_path, &ship_path)?;
+    check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
+    Ok(())
+}
+
+/// Warn if the bank is within the warn threshold of its (soft) size cap.
+/// The exact engine limit isn't known, so this never errors — it just
+/// surfaces a hint so the user can tune DefaultAudioCompression before
+/// they hit a wall in-game.
+fn check_bank_size(
+    cache_path: &PathBuf,
+    streamed: bool,
+    base_name: &str,
+    ext: &str,
+    source_map: &HashMap<String, SoundAssetBankSourceAsset>,
+) -> Result<(), String> {
+    let size = match fs::metadata(cache_path) {
+        Ok(m) => m.len(),
+        Err(_) => return Ok(()),
+    };
+    if size == 0 {
+        return Ok(());
+    }
+
+    let limit = if streamed {
+        SABS_LIMIT_BYTES
+    } else {
+        SABL_LIMIT_BYTES
+    };
+    let pct = size.saturating_mul(100) / limit;
+    if pct < BANK_WARN_THRESHOLD_PCT {
+        return Ok(());
+    }
+
+    let max_level = source_map
+        .values()
+        .map(|src| src.compression_level)
+        .max()
+        .unwrap_or(CompressionLevel::None);
+
+    if max_level == CompressionLevel::Extreme {
+        return Ok(());
+    }
+
+    eprintln!(
+        "^3warning: {}.{} is at {}% ({:.1} MB) of the {} MB estimated maximum safe bank size. highest compression level in use is {:?}; consider raising DefaultAudioCompression in the .szc, or tweak individual aliases",
+        base_name,
+        ext,
+        pct,
+        size as f64 / 1_000_000.0,
+        limit / 1_000_000,
+        max_level
+    );
     Ok(())
 }
 
@@ -193,10 +268,7 @@ struct PreConvertedObtainer {
 }
 
 impl SoundAssetObtainer for PreConvertedObtainer {
-    fn get_asset(
-        &mut self,
-        name: &str,
-    ) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
+    fn get_asset(&mut self, name: &str) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
         self.converted
             .remove(name)
             .ok_or_else(|| format!("obtainer: no pre-converted asset for '{}'", name))

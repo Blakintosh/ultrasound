@@ -1,5 +1,5 @@
-use std::io::Cursor;
 use lewton::inside_ogg::OggStreamReader;
+use std::io::Cursor;
 
 use crate::decoded_audio::DecodedAudio;
 
@@ -16,7 +16,12 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
         match reader.read_dec_packet_itl() {
             Ok(Some(packet)) => samples.extend_from_slice(&packet),
             Ok(None) => break,
-            Err(e) => return Err(format!("Failed to decode OGG packet in {}: {}", source_name, e)),
+            Err(e) => {
+                return Err(format!(
+                    "Failed to decode OGG packet in {}: {}",
+                    source_name, e
+                ));
+            }
         }
     }
 
@@ -34,7 +39,10 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_OGG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/zm_kar_roundstart_normal.ogg");
+    const SAMPLE_OGG: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/test_data/zm_kar_roundstart_normal.ogg"
+    );
 
     #[test]
     fn decode_real_file_produces_samples() {

@@ -1,5 +1,8 @@
-use std::{fs::File, io::{BufReader, Cursor, Read, Seek, SeekFrom}};
 use crate::units;
+use std::{
+    fs::File,
+    io::{BufReader, Cursor, Read, Seek, SeekFrom},
+};
 
 pub struct Riff {
     pub file_name: String,
@@ -9,7 +12,7 @@ pub struct Riff {
     pub data_byte_offset: u64,
     pub data_chunk_size: u64,
     pub format: u16,
-    pub frame_size: u16
+    pub frame_size: u16,
 }
 
 impl Riff {
@@ -21,7 +24,8 @@ impl Riff {
     }
 
     pub fn load_from_file(file_name: &str, input: &mut File) -> Result<Self, String> {
-        let metadata = input.metadata()
+        let metadata = input
+            .metadata()
             .map_err(|e| format!("Failed to get metadata for file {}: {}", file_name, e))?;
         let length = metadata.len();
         let mut reader = BufReader::new(input);
@@ -37,15 +41,25 @@ impl Riff {
         Self::parse_core(file_name, &mut cursor, length)
     }
 
-    fn parse_core<R: Read + Seek>(file_name: &str, mut reader: &mut R, length: u64) -> Result<Self, String> {
+    fn parse_core<R: Read + Seek>(
+        file_name: &str,
+        mut reader: &mut R,
+        length: u64,
+    ) -> Result<Self, String> {
         // Make sure the RIFF file is even possibly parseable.
         if length < 20 {
-            return Err(format!("File {} is truncated - too small to be a valid RIFF file.", file_name));
+            return Err(format!(
+                "File {} is truncated - too small to be a valid RIFF file.",
+                file_name
+            ));
         }
 
         // Check the RIFF header.
         if read_u32(&mut reader)? != 1179011410u32 {
-            return Err(format!("File {} does not start with RIFF header.", file_name));
+            return Err(format!(
+                "File {} does not start with RIFF header.",
+                file_name
+            ));
         }
         // Now make sure the size is OK.
         if read_u32(&mut reader)? as u64 != (length - 8) {
@@ -71,14 +85,19 @@ impl Riff {
             let chunk_size = read_u32(&mut reader)?;
 
             // Otherwise skip over this chunk, keep looking.
-            pos = reader.seek(SeekFrom::Current(chunk_size as i64))
+            pos = reader
+                .seek(SeekFrom::Current(chunk_size as i64))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
         // We're at the fmt chunk, find the length of the chunk and make sure its length fits.
         let fmt_chunk_size = read_u32(&mut reader)? as u64;
-        let fmt_data_start = reader.stream_position()
-            .map_err(|e| format!("Failed to get current position in file {}: {}", file_name, e))?;
+        let fmt_data_start = reader.stream_position().map_err(|e| {
+            format!(
+                "Failed to get current position in file {}: {}",
+                file_name, e
+            )
+        })?;
 
         // Grab the format properties.
         let format = read_u16(&mut reader)?;
@@ -91,7 +110,8 @@ impl Riff {
         // Now leave the fmt chunk, and seek out the "data" chunk.
         let fmt_end = fmt_data_start + fmt_chunk_size;
         pos = fmt_end;
-        reader.seek(SeekFrom::Start(fmt_end))
+        reader
+            .seek(SeekFrom::Start(fmt_end))
             .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
 
         const FOURCC_DATA: u32 = 1635017060u32;
@@ -108,14 +128,19 @@ impl Riff {
             let chunk_size = read_u32(&mut reader)?;
 
             // Otherwise skip over this chunk, keep looking.
-            pos = reader.seek(SeekFrom::Current(chunk_size as i64))
+            pos = reader
+                .seek(SeekFrom::Current(chunk_size as i64))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
         // At data section, grab its size and offset.
         let data_chunk_size = read_u32(&mut reader)? as u64;
-        let data_byte_offset = reader.stream_position()
-            .map_err(|e| format!("Failed to get current position in file {}: {}", file_name, e))?;
+        let data_byte_offset = reader.stream_position().map_err(|e| {
+            format!(
+                "Failed to get current position in file {}: {}",
+                file_name, e
+            )
+        })?;
 
         Ok(Riff {
             file_name: file_name.to_string(),
@@ -125,7 +150,7 @@ impl Riff {
             data_byte_offset,
             data_chunk_size,
             format,
-            frame_size
+            frame_size,
         })
     }
 
@@ -159,12 +184,18 @@ impl Riff {
         Ok(out)
     }
 
-    pub fn load_interleaved_s16_from_file(&self, input: &mut File, start_frame: u64, frame_count: u64) -> Result<Vec<i16>, String> {
+    pub fn load_interleaved_s16_from_file(
+        &self,
+        input: &mut File,
+        start_frame: u64,
+        frame_count: u64,
+    ) -> Result<Vec<i16>, String> {
         let mut reader = BufReader::new(input);
 
         let byte_count = self.get_data_length(frame_count);
         // Seek to the start data offset.
-        reader.seek(SeekFrom::Start(self.get_data_offset(start_frame)))
+        reader
+            .seek(SeekFrom::Start(self.get_data_offset(start_frame)))
             .map_err(|e| format!("Failed to seek in file {}: {}", self.file_name, e))?;
 
         // Read the data into a zero-initialised buffer via a short-read. If
@@ -177,12 +208,18 @@ impl Riff {
             match reader.read(&mut buffer[filled..]) {
                 Ok(0) => break,
                 Ok(n) => filled += n,
-                Err(e) => return Err(format!("Failed to read data from file {}: {}", self.file_name, e)),
+                Err(e) => {
+                    return Err(format!(
+                        "Failed to read data from file {}: {}",
+                        self.file_name, e
+                    ));
+                }
             }
         }
 
         // Now transform the byte buffer into a i16 buffer.
-        let result: Vec<i16> = buffer.chunks_exact(2)
+        let result: Vec<i16> = buffer
+            .chunks_exact(2)
             .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
         Ok(result)
@@ -225,7 +262,9 @@ impl Riff {
         while offset + window_size < total_frames {
             let mut sum_squares = 0.0;
             for i in 0..window_size {
-                let sample = data[(i + offset) * self.channel_count as usize + channel as usize] as f64 / 32768.0;
+                let sample = data[(i + offset) * self.channel_count as usize + channel as usize]
+                    as f64
+                    / 32768.0;
                 sum_squares += sample * sample;
             }
             let rms = (sum_squares / window_size as f64).sqrt();
@@ -268,7 +307,8 @@ impl Riff {
                     input[idx[3] * ch + channel] as f64,
                     input[idx[4] * ch + channel] as f64,
                     input[idx[5] * ch + channel] as f64,
-                ).clamp(-32767.0, 32767.0);
+                )
+                .clamp(-32767.0, 32767.0);
 
                 result[out_i * ch + channel] = sample as i16;
             }
@@ -288,14 +328,16 @@ impl Riff {
 
 fn read_u32(reader: &mut impl Read) -> Result<u32, String> {
     let mut buffer = [0u8; 4];
-    reader.read_exact(&mut buffer)
+    reader
+        .read_exact(&mut buffer)
         .map_err(|e| format!("Failed to read u32: {}", e))?;
     Ok(u32::from_le_bytes(buffer))
 }
 
 fn read_u16(reader: &mut impl Read) -> Result<u16, String> {
     let mut buffer = [0u8; 2];
-    reader.read_exact(&mut buffer)
+    reader
+        .read_exact(&mut buffer)
         .map_err(|e| format!("Failed to read u16: {}", e))?;
     Ok(u16::from_le_bytes(buffer))
 }
@@ -315,5 +357,13 @@ fn poly(x: f64, y_2: f64, y_1: f64, y0: f64, y1: f64, y2: f64, y3: f64) -> f64 {
     let j = b * -0.25112715343741 + d * 0.0422302599220046 + f * 0.0248872747299513;
     let k = a * 0.0416694667353327 + c * -0.0625042011435699 + e * 0.020834734408418;
 
-    (((((b * 0.0834979923567504 + d * -0.0417491284163099 + f * 0.00834987866042734) * base + k) * base + j) * base + i) * base + h) * base + g
+    (((((b * 0.0834979923567504 + d * -0.0417491284163099 + f * 0.00834987866042734) * base + k)
+        * base
+        + j)
+        * base
+        + i)
+        * base
+        + h)
+        * base
+        + g
 }

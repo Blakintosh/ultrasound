@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use super::Row;
+use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
 pub struct RowLocale {

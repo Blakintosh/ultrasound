@@ -8,15 +8,17 @@ pub struct AssetEnvelope {
 const ENVELOPE_BUCKET_SIZE: usize = 512;
 
 impl AssetEnvelope {
-    pub fn envelope_extract(frame_count: u64, channel_count: u16, samples: &[i16]) -> AssetEnvelope {
+    pub fn envelope_extract(
+        frame_count: u64,
+        channel_count: u16,
+        samples: &[i16],
+    ) -> AssetEnvelope {
         let bucket_count = (frame_count / ENVELOPE_BUCKET_SIZE as u64) as usize;
 
         // If at or below bucket size, return a more basic envelope.
         if bucket_count <= 1 {
-            let peak = samples.iter()
-                .map(|&x| x.unsigned_abs())
-                .max()
-                .unwrap_or(0) as f64 / 32768.0;
+            let peak =
+                samples.iter().map(|&x| x.unsigned_abs()).max().unwrap_or(0) as f64 / 32768.0;
 
             return AssetEnvelope {
                 left: vec![peak, peak, peak, peak],
@@ -91,7 +93,8 @@ impl AssetEnvelope {
                     smoothed[left_idx] = buckets[left_idx];
                 } else {
                     let t = (i - left_idx) as f64 / (right_idx - left_idx) as f64;
-                    smoothed[i] = (buckets[left_idx] * (1.0 - t) + buckets[right_idx] * t) as i32 as f64;
+                    smoothed[i] =
+                        (buckets[left_idx] * (1.0 - t) + buckets[right_idx] * t) as i32 as f64;
                 }
             }
 

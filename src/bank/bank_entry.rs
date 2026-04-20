@@ -1,4 +1,3 @@
-
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct BankEntry {
@@ -20,7 +19,23 @@ pub struct BankEntry {
 }
 
 impl BankEntry {
-    pub fn new(name: u32, size: u32, frame_count: u32, order: u32, offset: u64, frame_rate_index: u8, channel_count: u8, looping: u8, format: u8, envelope_loudness0: u8, envelope_loudness1: u8, envelope_loudness2: u8, envelope_loudness3: u8, envelope_time1: u16, envelope_time2: u16) -> BankEntry {
+    pub fn new(
+        name: u32,
+        size: u32,
+        frame_count: u32,
+        order: u32,
+        offset: u64,
+        frame_rate_index: u8,
+        channel_count: u8,
+        looping: u8,
+        format: u8,
+        envelope_loudness0: u8,
+        envelope_loudness1: u8,
+        envelope_loudness2: u8,
+        envelope_loudness3: u8,
+        envelope_time1: u16,
+        envelope_time2: u16,
+    ) -> BankEntry {
         BankEntry {
             name,
             size,
@@ -36,14 +51,18 @@ impl BankEntry {
             envelope_loudness2,
             envelope_loudness3,
             envelope_time1,
-            envelope_time2
+            envelope_time2,
         }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let expected = std::mem::size_of::<Self>();
         if bytes.len() < expected {
-            return Err(format!("BankEntry buffer too small: {} < {}", bytes.len(), expected));
+            return Err(format!(
+                "BankEntry buffer too small: {} < {}",
+                bytes.len(),
+                expected
+            ));
         }
         Ok(unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }

@@ -9,6 +9,7 @@ Ultrasound is a drop-in replacement for the Black Ops III Mod Tools' snd_convert
 * Supports converting non-48k WAV files, including with correct resampling.
 * Support for direct FLAC format.
 * Support for OGG format.
+* Optional support for lossy compression levels that reduce `.sabl` / `.sabs` bank sizes.
 
 ## Installation
 

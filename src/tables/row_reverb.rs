@@ -61,8 +61,8 @@ impl crate::tables::Row for RowReverb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use crate::tables::load_table;
+    use std::path::Path;
 
     #[test]
     fn load_real_reverb_csv() {
@@ -71,7 +71,10 @@ mod tests {
         assert!(!rows.is_empty(), "should have at least one row");
         println!("Loaded {} reverbs", rows.len());
         for r in rows.iter().take(3) {
-            println!("  {} master_return={} near_decay={}", r.name, r.master_return, r.near_decay_time);
+            println!(
+                "  {} master_return={} near_decay={}",
+                r.name, r.master_return, r.near_decay_time
+            );
         }
     }
 }

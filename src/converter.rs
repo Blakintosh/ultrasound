@@ -1,39 +1,45 @@
 use std::fs;
 use std::path::Path;
 
+use std::str::FromStr;
+
+use serde::Deserialize;
+
 use crate::{
     asset_types::AssetEnvelope,
     bank::bank_entry::BankEntry,
     decoded_audio::DecodedAudio,
-    flac,
-    ogg,
+    flac, ogg,
     riff::Riff,
     source_asset_cache::Checksum,
     tables::{row_locale::RowLocale, row_platform::RowPlatform},
 };
 
-
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AliasLooping {
     Looping,
-    NonLooping
+    NonLooping,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AliasStorage {
     Loaded,
     Streamed,
-    Primed
+    Primed,
 }
 
 pub enum AssetFormat {
     SndAssetFormatPcms16 = 0,
-    SndAssetFormatFlac = 8
+    SndAssetFormatFlac = 8,
 }
 
 /// Per-asset lossy-compression budget. Picks a bit-depth truncation level
-/// and a silence-gate threshold. Lower tiers preserve more detail; higher
-/// tiers shrink the bank at the cost of noise floor and quiet tails.
-#[derive(Copy, Clone, Debug)]
-pub enum CompressionTier {
+/// and a silence-gate threshold. Lower levels preserve more detail; higher
+/// levels shrink the bank at the cost of noise floor and quiet tails.
+#[derive(Copy, Clone, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String")]
+pub enum CompressionLevel {
+    #[default]
     None,
     Low,
     Medium,
@@ -41,36 +47,94 @@ pub enum CompressionTier {
     Extreme,
 }
 
-impl CompressionTier {
+impl CompressionLevel {
     /// Mask AND-ed with each i16 sample to discard low-order bits. `None`
     /// leaves the sample untouched.
     pub fn truncate_mask(self) -> i16 {
         match self {
-            CompressionTier::None => !0x0000,
-            CompressionTier::Low => !0x0003,     // 14-bit
-            CompressionTier::Medium => !0x000F,  // 12-bit
-            CompressionTier::High => !0x003F,    // 10-bit
-            CompressionTier::Extreme => !0x00FF, //  8-bit
+            CompressionLevel::None => !0x0000,
+            CompressionLevel::Low => !0x0003,     // 14-bit
+            CompressionLevel::Medium => !0x000F,  // 12-bit
+            CompressionLevel::High => !0x003F,    // 10-bit
+            CompressionLevel::Extreme => !0x00FF, //  8-bit
         }
     }
 
-    /// Silence-gate peak-amplitude threshold. Returns `None` for tiers that
+    /// Silence-gate peak-amplitude threshold. Returns `None` for levels that
     /// skip the gate entirely. Scaled roughly to 4× the truncation step so
     /// the gate only ever chops content that's already near or below the
     /// quantisation noise floor.
     pub fn silence_gate_threshold(self) -> Option<i16> {
         match self {
-            CompressionTier::None => None,
-            CompressionTier::Low => Some(128),     // ~-48 dB
-            CompressionTier::Medium => Some(256),  // ~-42 dB
-            CompressionTier::High => Some(256),    // ~-42 dB
-            CompressionTier::Extreme => Some(1024),// ~-30 dB
+            CompressionLevel::None => None,
+            CompressionLevel::Low => Some(128),      // ~-48 dB
+            CompressionLevel::Medium => Some(256),   // ~-42 dB
+            CompressionLevel::High => Some(256),     // ~-42 dB
+            CompressionLevel::Extreme => Some(1024), // ~-30 dB
         }
     }
 
-    /// Frame count per gate window. Fixed across tiers — 128 frames ≈
+    /// Frame count per gate window. Fixed across levels — 128 frames ≈
     /// 2.7 ms at 48 kHz, the shortest "silence" worth detecting.
     pub const GATE_WINDOW_FRAMES: usize = 128;
+
+    /// Stable byte encoding of the level's *actual* compression parameters
+    /// (truncation mask, gate window, gate on/off, gate threshold). Fed into
+    /// the source checksum so that any retune — switching an asset's level
+    /// *or* changing what a level means in code — invalidates the bank entry
+    /// and forces reconversion. Update this if you add a new dimension.
+    pub fn recipe_fingerprint(self) -> [u8; 13] {
+        let mask = self.truncate_mask().to_le_bytes();
+        let gate_window = (Self::GATE_WINDOW_FRAMES as u64).to_le_bytes();
+        let (has_gate, threshold) = match self.silence_gate_threshold() {
+            Some(t) => (1u8, t),
+            None => (0u8, 0),
+        };
+        let threshold = threshold.to_le_bytes();
+        [
+            mask[0],
+            mask[1],
+            gate_window[0],
+            gate_window[1],
+            gate_window[2],
+            gate_window[3],
+            gate_window[4],
+            gate_window[5],
+            gate_window[6],
+            gate_window[7],
+            has_gate,
+            threshold[0],
+            threshold[1],
+        ]
+    }
+}
+
+impl FromStr for CompressionLevel {
+    type Err = String;
+
+    /// Case-invariant. Accepts the five canonical names only. Used by the
+    /// top-level SZC deserializer via `TryFrom<String>` and by the alias
+    /// CSV column parser after its own alias handling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            "extreme" => Ok(Self::Extreme),
+            other => Err(format!(
+                "unknown compression level '{}' (expected None, Low, Medium, High, Extreme)",
+                other
+            )),
+        }
+    }
+}
+
+impl TryFrom<String> for CompressionLevel {
+    type Error = String;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
 }
 
 pub struct SoundAssetBankSourceAsset {
@@ -78,6 +142,7 @@ pub struct SoundAssetBankSourceAsset {
     pub looping: AliasLooping,
     pub storage: AliasStorage,
     pub compression: i32,
+    pub compression_level: CompressionLevel,
     pub locale: RowLocale,
     pub platform: RowPlatform,
     pub converted_name: String,
@@ -148,7 +213,11 @@ pub fn convert_source_inline(
 
     let data = fs::read(&asset.source_name)
         .map_err(|e| format!("Failed to read file {}: {}", asset.source_name, e))?;
-    let source_checksum = Checksum::from_data(&data);
+    // Recipe-aware source checksum: mixes the file bytes with the level's
+    // compression fingerprint so retuning (or reassigning) a level
+    // invalidates the matching bank entry on the next run.
+    let source_checksum =
+        Checksum::from_data_with_recipe(&data, &asset.compression_level.recipe_fingerprint());
 
     let ext = Path::new(&asset.source_name)
         .extension()
@@ -167,12 +236,16 @@ pub fn convert_source_inline(
         let riff = Riff::parse(&asset.source_name, &data)?;
 
         if riff.format != 1 && riff.format != 65534 {
-            return Err(format!("Unsupported audio format in {}: {}", asset.source_name, riff.format));
+            return Err(format!(
+                "Unsupported audio format in {}: {}",
+                asset.source_name, riff.format
+            ));
         }
         if riff.frame_size / riff.channel_count != 2 {
             return Err(format!(
                 "Unsupported bit depth (requires 16-bit) in {}: {}",
-                asset.source_name, riff.frame_size * 8 / riff.channel_count
+                asset.source_name,
+                riff.frame_size * 8 / riff.channel_count
             ));
         }
 
@@ -193,7 +266,10 @@ pub fn convert_source_inline(
 
     // Common validation for both paths.
     if BankEntry::lookup_frame_rate_index(audio.frame_rate as i32) == u8::MAX {
-        return Err(format!("Unsupported sample rate in {}: {}", asset.source_name, audio.frame_rate));
+        return Err(format!(
+            "Unsupported sample rate in {}: {}",
+            asset.source_name, audio.frame_rate
+        ));
     }
     if audio.channel_count > 2 {
         return Err(format!(
@@ -202,7 +278,8 @@ pub fn convert_source_inline(
         ));
     }
 
-    let envelope = AssetEnvelope::envelope_extract(audio.frame_count, audio.channel_count, &audio.samples);
+    let envelope =
+        AssetEnvelope::envelope_extract(audio.frame_count, audio.channel_count, &audio.samples);
 
     // Resample + FLAC encode. Empty audio → empty FLAC payload.
     let flac_out = if audio.frame_count == 0 {
@@ -212,36 +289,44 @@ pub fn convert_source_inline(
         let mut frame_count = audio.frame_count as i32;
         let mut pcm = if frame_rate != 48000 {
             frame_count = (audio.frame_count * 48000 / frame_rate as u64) as i32;
-            let resampled = Riff::resize(&audio.samples, audio.channel_count as u32, frame_count as u32);
+            let resampled = Riff::resize(
+                &audio.samples,
+                audio.channel_count as u32,
+                frame_count as u32,
+            );
             frame_rate = 48000;
             resampled
         } else {
             audio.samples
         };
-        // Lossy pre-passes driven by the current compression tier. Silence
+        // Lossy pre-passes driven by the asset's compression level. Silence
         // gate first (zero long quiet runs so FLAC encodes them as flat
         // subframes), then bit-depth truncation (raises the noise floor
         // but gives FLAC's predictor much smaller residuals to Rice-code).
-        // A single constant picks the tier for every asset in the build;
-        // later this will be driven per-alias.
-        const COMPRESSION_TIER: CompressionTier = CompressionTier::High;
+        let level = asset.compression_level;
 
-        if let Some(threshold) = COMPRESSION_TIER.silence_gate_threshold() {
+        if let Some(threshold) = level.silence_gate_threshold() {
             silence_gate(
                 &mut pcm,
                 audio.channel_count as usize,
-                CompressionTier::GATE_WINDOW_FRAMES,
+                CompressionLevel::GATE_WINDOW_FRAMES,
                 threshold,
             );
         }
 
-        let mask = COMPRESSION_TIER.truncate_mask();
+        let mask = level.truncate_mask();
         if mask != !0 {
             for s in &mut pcm {
                 *s &= mask;
             }
         }
-        flac::encode(&asset.source_name, audio.channel_count as i32, frame_rate, frame_count, &pcm)?
+        flac::encode(
+            &asset.source_name,
+            audio.channel_count as i32,
+            frame_rate,
+            frame_count,
+            &pcm,
+        )?
     };
 
     let converted_frame_count = if audio.frame_rate != 48000 {
@@ -292,5 +377,25 @@ fn silence_gate(pcm: &mut [i16], channels: usize, window_frames: usize, threshol
                 *s = 0;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recipe_fingerprint_encodes_gate_window() {
+        let fingerprint = CompressionLevel::High.recipe_fingerprint();
+
+        let mut encoded_window = [0u8; 8];
+        encoded_window.copy_from_slice(&fingerprint[2..10]);
+
+        assert_eq!(fingerprint.len(), 13);
+        assert_eq!(
+            u64::from_le_bytes(encoded_window),
+            CompressionLevel::GATE_WINDOW_FRAMES as u64
+        );
+        assert_eq!(fingerprint[10], 1);
     }
 }
