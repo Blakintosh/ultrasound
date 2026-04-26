@@ -4,7 +4,7 @@ pub struct Env {
     game_dir: PathBuf,
     tools_dir: PathBuf,
     platform_working_dir: PathBuf,
-    source_dir: PathBuf
+    source_dir: PathBuf,
 }
 
 impl Env {
@@ -20,7 +20,7 @@ impl Env {
             game_dir,
             tools_dir,
             platform_working_dir,
-            source_dir
+            source_dir,
         })
     }
 
@@ -63,7 +63,10 @@ impl Env {
 
     /// Gets the sounds directory for a particular language.
     pub fn get_sound_dir_for_language(&self, language: &str) -> PathBuf {
-        self.get_game_dir().join("share/raw").join(language).join("sound")
+        self.get_game_dir()
+            .join("share/raw")
+            .join(language)
+            .join("sound")
     }
 
     /// Gets the database cache directory
@@ -168,7 +171,8 @@ impl Env {
 
     /// Gets the ship alias source CSV path
     pub fn get_ship_alias_source_csv(&self, name: &str) -> PathBuf {
-        self.get_sound_ship_alias_dir().join(format!("{}.csv", name))
+        self.get_sound_ship_alias_dir()
+            .join(format!("{}.csv", name))
     }
 
     /// Gets the ambient source CSV path
@@ -178,7 +182,8 @@ impl Env {
 
     /// Gets the ship ambient source CSV path
     pub fn get_ship_ambient_source_csv(&self, name: &str) -> PathBuf {
-        self.get_sound_ship_alias_dir().join(format!("{}.csv", name))
+        self.get_sound_ship_alias_dir()
+            .join(format!("{}.csv", name))
     }
 
     /// Gets the sound global CSV path
@@ -189,7 +194,10 @@ impl Env {
 
     /// Gets the sound ship global CSV path
     pub fn get_sound_ship_global_csv(&self, name: &str) -> PathBuf {
-        let path = self.get_sound_ship_globals_dir().join("globals").join(format!("{}.csv", name));
+        let path = self
+            .get_sound_ship_globals_dir()
+            .join("globals")
+            .join(format!("{}.csv", name));
         self.get_csv_or_xls(&path)
     }
 
@@ -229,7 +237,9 @@ impl Env {
 
     /// Gets the zone source .zone file path
     pub fn get_zone_source_zone(&self, zone: &str) -> PathBuf {
-        self.source_dir.join("zone_source").join(format!("{}.zone", zone))
+        self.source_dir
+            .join("zone_source")
+            .join(format!("{}.zone", zone))
     }
 
     /// Gets the zone source .zpkg file path

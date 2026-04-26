@@ -3,7 +3,16 @@ use std::fs::{self, File};
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::{bank::{bank_entry::{self, BankEntry}, bank_header::BankHeader}, converter::{AliasLooping, AssetFormat, SoundAssetBankConvertedAsset}, obtainer::SoundAssetObtainer, source_asset_cache::Checksum, string_hash};
+use crate::{
+    bank::{
+        bank_entry::{self, BankEntry},
+        bank_header::BankHeader,
+    },
+    converter::{AliasLooping, AssetFormat, SoundAssetBankConvertedAsset},
+    obtainer::SoundAssetObtainer,
+    source_asset_cache::Checksum,
+    string_hash,
+};
 
 const ASSET_NAME_BYTES: usize = 128;
 
@@ -11,12 +20,22 @@ pub struct SoundAssetBankFile {
     pub entry: BankEntry,
     pub name: String,
     pub source_checksum: Checksum,
-    pub converted_checksum: Checksum
+    pub converted_checksum: Checksum,
 }
 
 impl SoundAssetBankFile {
-    pub fn new(entry: BankEntry, name: &str, source_checksum: Checksum, converted_checksum: Checksum) -> Self {
-        SoundAssetBankFile { entry, name: name.to_string(), source_checksum, converted_checksum }
+    pub fn new(
+        entry: BankEntry,
+        name: &str,
+        source_checksum: Checksum,
+        converted_checksum: Checksum,
+    ) -> Self {
+        SoundAssetBankFile {
+            entry,
+            name: name.to_string(),
+            source_checksum,
+            converted_checksum,
+        }
     }
 }
 
@@ -24,21 +43,28 @@ pub struct SoundAssetBank {
     file_name: String,
     header: BankHeader,
     bank_files: Vec<SoundAssetBankFile>,
-    bank_file_index: HashMap<String, usize>
+    bank_file_index: HashMap<String, usize>,
 }
 
 impl SoundAssetBank {
-    pub fn new(file_name: &str, header: BankHeader, entries: &[BankEntry], converted_checksums: &[Checksum], source_checksums: &[Checksum], asset_names: &[&str]) -> Self {
+    pub fn new(
+        file_name: &str,
+        header: BankHeader,
+        entries: &[BankEntry],
+        converted_checksums: &[Checksum],
+        source_checksums: &[Checksum],
+        asset_names: &[&str],
+    ) -> Self {
         let count = header.entry_count as usize;
         let mut bank_files: Vec<SoundAssetBankFile> = Vec::with_capacity(count);
         let mut bank_file_index: HashMap<String, usize> = HashMap::with_capacity(count);
 
         for i in 0..count {
             bank_files.push(SoundAssetBankFile::new(
-                entries[i], 
-                asset_names[i], 
-                source_checksums[i], 
-                converted_checksums[i]
+                entries[i],
+                asset_names[i],
+                source_checksums[i],
+                converted_checksums[i],
             ));
             bank_file_index.insert(asset_names[i].to_string(), i);
         }
@@ -47,7 +73,7 @@ impl SoundAssetBank {
             file_name: file_name.to_string(),
             header,
             bank_files,
-            bank_file_index
+            bank_file_index,
         }
     }
 
@@ -56,7 +82,7 @@ impl SoundAssetBank {
             file_name: file_name.to_string(),
             header,
             bank_files: Vec::with_capacity(0),
-            bank_file_index: HashMap::new()
+            bank_file_index: HashMap::new(),
         }
     }
 
@@ -91,8 +117,12 @@ impl SoundAssetBank {
         self.header.set_language(language);
     }
 
-    pub fn get_asset(&self, converted_name: &str) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
-        let file_index = self.find_file_index(converted_name)
+    pub fn get_asset(
+        &self,
+        converted_name: &str,
+    ) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
+        let file_index = self
+            .find_file_index(converted_name)
             .ok_or_else(|| format!("Could not find file {} in the bank.", converted_name))?;
 
         let bank_file = &self.bank_files[*file_index];
@@ -101,12 +131,16 @@ impl SoundAssetBank {
             &bank_file.name,
             bank_file.converted_checksum,
             bank_file.source_checksum,
-            match bank_file.entry.format {                                                                                                                                                                                                                    
-                0 => AssetFormat::SndAssetFormatPcms16,                                                                                                                                                                                                                    
+            match bank_file.entry.format {
+                0 => AssetFormat::SndAssetFormatPcms16,
                 8 => AssetFormat::SndAssetFormatFlac,
                 other => return Err(format!("Unknown asset format: {}", other)),
             },
-            if bank_file.entry.looping == 1 { AliasLooping::Looping } else { AliasLooping::NonLooping },
+            if bank_file.entry.looping == 1 {
+                AliasLooping::Looping
+            } else {
+                AliasLooping::NonLooping
+            },
             bank_file.entry.frame_count as i64,
             bank_file.entry.get_frame_rate(),
             bank_file.entry.channel_count as i32,
@@ -144,8 +178,10 @@ impl SoundAssetBank {
         // Invalidate on disk first so a crash mid-compact leaves an obviously-bad file.
         let mut scratch = BankHeader::new();
         scratch.invalidate();
-        file.seek(SeekFrom::Start(0)).map_err(|e| format!("Failed to seek: {}", e))?;
-        file.write_all(&scratch.to_bytes()).map_err(|e| format!("Failed to write: {}", e))?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| format!("Failed to seek: {}", e))?;
+        file.write_all(&scratch.to_bytes())
+            .map_err(|e| format!("Failed to write: {}", e))?;
 
         // Walk entries, shifting any that aren't at the expected offset.
         let mut position = std::mem::size_of::<BankHeader>() as u64;
@@ -200,14 +236,22 @@ impl SoundAssetBank {
         }
     }
 
-    fn remove_files(&mut self, file: &mut File, to_remove: &HashSet<u32>, strip_names: bool) -> Result<(), String> {
+    fn remove_files(
+        &mut self,
+        file: &mut File,
+        to_remove: &HashSet<u32>,
+        strip_names: bool,
+    ) -> Result<(), String> {
         self.invalidate_header(file)?;
 
         // Validate every requested removal actually exists in the bank.
         let present: HashSet<u32> = self.bank_files.iter().map(|f| f.entry.name).collect();
         for hash in to_remove {
             if !present.contains(hash) {
-                return Err(format!("Can't remove a file that isn't in the bank: {}", hash));
+                return Err(format!(
+                    "Can't remove a file that isn't in the bank: {}",
+                    hash
+                ));
             }
         }
 
@@ -277,7 +321,11 @@ impl SoundAssetBank {
                     AssetFormat::SndAssetFormatPcms16 => 0,
                     AssetFormat::SndAssetFormatFlac => 8,
                 };
-                let looping_byte = if matches!(asset.looping, AliasLooping::Looping) { 1 } else { 0 };
+                let looping_byte = if matches!(asset.looping, AliasLooping::Looping) {
+                    1
+                } else {
+                    0
+                };
 
                 let entry = BankEntry::new(
                     string_hash::hash(name),
@@ -305,7 +353,8 @@ impl SoundAssetBank {
                     source_checksum,
                     converted_checksum,
                 ));
-                self.bank_file_index.insert(name.clone(), self.bank_files.len() - 1);
+                self.bank_file_index
+                    .insert(name.clone(), self.bank_files.len() - 1);
 
                 writer
                     .write_all(&data)
@@ -317,7 +366,8 @@ impl SoundAssetBank {
                 .map_err(|e| format!("Failed to flush blob writer: {}", e))?;
         }
 
-        let end_position = file.stream_position()
+        let end_position = file
+            .stream_position()
             .map_err(|e| format!("Failed to get position: {}", e))?;
         self.write_metadata(file, end_position, strip_names)?;
         self.write_header(file)?;
@@ -346,7 +396,13 @@ impl SoundAssetBank {
                 .map_err(|e| format!("Failed to open {}: {}", self.file_name, e))?;
 
             self.remove_files(&mut file, to_remove, strip_names)?;
-            self.add_files(&mut file, converter, to_add, converted_asset_version, strip_names)?;
+            self.add_files(
+                &mut file,
+                converter,
+                to_add,
+                converted_asset_version,
+                strip_names,
+            )?;
         }
 
         // Post-condition: file should be a sane bank after modification.
@@ -390,9 +446,10 @@ impl SoundAssetBank {
             return Ok(Self::new_empty(file_name, header));
         }
 
-        let mut file = File::open(file_name)
-            .map_err(|e| format!("Failed to open {}: {}", file_name, e))?;
-        let file_size = file.metadata()
+        let mut file =
+            File::open(file_name).map_err(|e| format!("Failed to open {}: {}", file_name, e))?;
+        let file_size = file
+            .metadata()
             .map_err(|e| format!("Failed to read metadata for {}: {}", file_name, e))?
             .len() as i64;
 
@@ -410,7 +467,8 @@ impl SoundAssetBank {
             return Err("Bank is missing required offsets".to_string());
         }
 
-        if converted_asset_version != 0 && header.converted_asset_version != converted_asset_version {
+        if converted_asset_version != 0 && header.converted_asset_version != converted_asset_version
+        {
             return Err("Converted asset version mismatch".to_string());
         }
 
@@ -418,8 +476,11 @@ impl SoundAssetBank {
 
         let entries: Vec<BankEntry> =
             read_packed_array(&mut file, header.entry_offset as u64, entry_count)?;
-        let converted_checksums: Vec<Checksum> =
-            read_packed_array(&mut file, header.converted_checksum_offset as u64, entry_count)?;
+        let converted_checksums: Vec<Checksum> = read_packed_array(
+            &mut file,
+            header.converted_checksum_offset as u64,
+            entry_count,
+        )?;
         let source_checksums: Vec<Checksum> =
             read_packed_array(&mut file, header.source_checksum_offset as u64, entry_count)?;
 
@@ -462,7 +523,12 @@ impl SoundAssetBank {
     }
 
     fn write_header(&mut self, file: &mut File) -> Result<(), String> {
-        self.header.fix(self.bank_files.len().try_into().unwrap(), file.metadata().map_err(|e| format!("Failed to get metadata: {}", e))?.len() as i64);
+        self.header.fix(
+            self.bank_files.len().try_into().unwrap(),
+            file.metadata()
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .len() as i64,
+        );
 
         file.seek(SeekFrom::Start(0))
             .map_err(|e| format!("Failed to seek: {}", e))?;
@@ -474,7 +540,12 @@ impl SoundAssetBank {
         Ok(())
     }
 
-    fn write_metadata(&mut self, file: &mut File, position: u64, strip_names: bool) -> Result<(), String> {
+    fn write_metadata(
+        &mut self,
+        file: &mut File,
+        position: u64,
+        strip_names: bool,
+    ) -> Result<(), String> {
         file.seek(SeekFrom::Start(align(position, 2048)))
             .map_err(|e| format!("Failed to seek: {}", e))?;
 
@@ -482,7 +553,11 @@ impl SoundAssetBank {
 
         // Extract the three parallel arrays from bank_files and write them.
         let entries: Vec<BankEntry> = self.bank_files.iter().map(|f| f.entry).collect();
-        let converted: Vec<Checksum> = self.bank_files.iter().map(|f| f.converted_checksum).collect();
+        let converted: Vec<Checksum> = self
+            .bank_files
+            .iter()
+            .map(|f| f.converted_checksum)
+            .collect();
         let source: Vec<Checksum> = self.bank_files.iter().map(|f| f.source_checksum).collect();
 
         let (entry_bytes, entry_offset) = write_array(file, &entries)?;
@@ -496,7 +571,8 @@ impl SoundAssetBank {
 
         // Align before the name table.
         let name_offset = align(
-            file.stream_position().map_err(|e| format!("Failed to get position: {}", e))?,
+            file.stream_position()
+                .map_err(|e| format!("Failed to get position: {}", e))?,
             2048,
         );
         file.seek(SeekFrom::Start(name_offset))
@@ -533,9 +609,11 @@ impl SoundAssetBank {
             &dependencies,
         );
 
-        let end = file.stream_position()
+        let end = file
+            .stream_position()
             .map_err(|e| format!("Failed to get position: {}", e))?;
-        file.set_len(end).map_err(|e| format!("Failed to set length: {}", e))?;
+        file.set_len(end)
+            .map_err(|e| format!("Failed to set length: {}", e))?;
         self.header.file_size = end as i64;
 
         Ok(())
@@ -552,10 +630,25 @@ fn compute_content_checksum(
     language: &[u8],
     dependencies: &[u8],
 ) -> Checksum {
-    let total = entry_bytes.len() + converted_bytes.len() + source_bytes.len()
-        + name_bytes.len() + zone_name.len() + platform.len() + language.len() + dependencies.len();
+    let total = entry_bytes.len()
+        + converted_bytes.len()
+        + source_bytes.len()
+        + name_bytes.len()
+        + zone_name.len()
+        + platform.len()
+        + language.len()
+        + dependencies.len();
     let mut buf = Vec::with_capacity(total);
-    for slice in [entry_bytes, converted_bytes, source_bytes, name_bytes, zone_name, platform, language, dependencies] {
+    for slice in [
+        entry_bytes,
+        converted_bytes,
+        source_bytes,
+        name_bytes,
+        zone_name,
+        platform,
+        language,
+        dependencies,
+    ] {
         buf.extend_from_slice(slice);
     }
     Checksum::from_data(&buf)
@@ -574,19 +667,15 @@ fn read_packed_array<T: Copy>(
         .map_err(|e| format!("Failed to read packed array: {}", e))?;
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
-        let elem = unsafe {
-            std::ptr::read_unaligned(buf[i * elem_size..].as_ptr() as *const T)
-        };
+        let elem = unsafe { std::ptr::read_unaligned(buf[i * elem_size..].as_ptr() as *const T) };
         out.push(elem);
     }
     Ok(out)
 }
 
-fn write_array<T: Copy>(
-    file: &mut File,
-    array: &[T],
-) -> Result<(Vec<u8>, u64), String> {
-    let position = file.stream_position()
+fn write_array<T: Copy>(file: &mut File, array: &[T]) -> Result<(Vec<u8>, u64), String> {
+    let position = file
+        .stream_position()
         .map_err(|e| format!("Failed to get position: {}", e))?;
 
     let new_offset = align(position, 2048);
@@ -629,7 +718,10 @@ mod tests {
             let offset = file.entry.offset;
             let frame_rate = file.entry.get_frame_rate();
             let channels = file.entry.channel_count;
-            println!("  {} @ 0x{:x} ({} bytes, {} Hz, {} ch)", name, offset, size, frame_rate, channels);
+            println!(
+                "  {} @ 0x{:x} ({} bytes, {} Hz, {} ch)",
+                name, offset, size, frame_rate, channels
+            );
         }
 
         // Entries should be monotonic by offset.
@@ -654,11 +746,7 @@ mod tests {
         assert!(!src_files.is_empty());
 
         // Pick the first 3 asset names to copy.
-        let to_copy: HashSet<String> = src_files
-            .iter()
-            .take(3)
-            .map(|f| f.name.clone())
-            .collect();
+        let to_copy: HashSet<String> = src_files.iter().take(3).map(|f| f.name.clone()).collect();
         let expected_count = to_copy.len();
 
         // Capture ground-truth bytes from source before we start mutating things.
@@ -683,17 +771,28 @@ mod tests {
         // Reload the destination and verify everything round-tripped.
         let loaded = SoundAssetBank::load(dst_path, 0);
         let file_size = std::fs::metadata(dst_path).unwrap().len() as i64;
-        loaded.is_sane(file_size).expect("round-tripped bank should be sane");
+        loaded
+            .is_sane(file_size)
+            .expect("round-tripped bank should be sane");
 
         let loaded_files = loaded.get_files();
-        assert_eq!(loaded_files.len(), expected_count,
-                   "expected {} assets, got {}", expected_count, loaded_files.len());
+        assert_eq!(
+            loaded_files.len(),
+            expected_count,
+            "expected {} assets, got {}",
+            expected_count,
+            loaded_files.len()
+        );
 
         for (name, expected_bytes) in &expected {
-            let (_, actual_bytes) = loaded.get_asset(name)
+            let (_, actual_bytes) = loaded
+                .get_asset(name)
                 .unwrap_or_else(|e| panic!("loaded get_asset({}) failed: {}", name, e));
-            assert_eq!(&actual_bytes, expected_bytes,
-                       "asset {} bytes differ after round-trip", name);
+            assert_eq!(
+                &actual_bytes, expected_bytes,
+                "asset {} bytes differ after round-trip",
+                name
+            );
         }
 
         println!("Round-tripped {} assets successfully", expected_count);
@@ -728,15 +827,11 @@ fn copy_range(file: &mut File, src: u64, dst: u64, size: u64) -> Result<(), Stri
     Ok(())
 }
 
-fn slice_as_bytes<T: Copy>(slice: &[T]) -> Vec<u8> {                                                                                                                                                                                                           
-    let byte_len = std::mem::size_of_val(slice);                                                                                                                                                                                                               
-    let mut out = vec![0u8; byte_len];                                                                                                                                                                                                                         
-    unsafe {    
-        std::ptr::copy_nonoverlapping(
-            slice.as_ptr() as *const u8,
-            out.as_mut_ptr(),
-            byte_len,
-        );
+fn slice_as_bytes<T: Copy>(slice: &[T]) -> Vec<u8> {
+    let byte_len = std::mem::size_of_val(slice);
+    let mut out = vec![0u8; byte_len];
+    unsafe {
+        std::ptr::copy_nonoverlapping(slice.as_ptr() as *const u8, out.as_mut_ptr(), byte_len);
     }
     out
 }

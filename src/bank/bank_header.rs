@@ -50,11 +50,15 @@ impl BankHeader {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let expected = std::mem::size_of::<Self>();
         if bytes.len() < expected {
-            return Err(format!("BankHeader buffer too small: {} < {}", bytes.len(), expected));
+            return Err(format!(
+                "BankHeader buffer too small: {} < {}",
+                bytes.len(),
+                expected
+            ));
         }
         Ok(unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
-    
+
     pub fn to_bytes(&self) -> [u8; 2048] {
         let mut out = [0u8; 2048];
 
@@ -62,7 +66,7 @@ impl BankHeader {
             ptr::copy_nonoverlapping(
                 self as *const Self as *const u8,
                 out.as_mut_ptr(),
-                mem::size_of::<Self>()
+                mem::size_of::<Self>(),
             );
         }
         out
@@ -71,35 +75,45 @@ impl BankHeader {
     pub fn set_zone_name(&mut self, name: &str) {
         let ascii = name.as_bytes();
         let len = ascii.len().min(ZONE_NAME_LENGTH);
-        
+
         self.zone_name[..len].copy_from_slice(&ascii[..len]);
     }
 
     pub fn set_platform(&mut self, platform: &str) {
         let ascii = platform.as_bytes();
         let len = ascii.len().min(PLATFORM_LENGTH);
-        
+
         self.platform[..len].copy_from_slice(&ascii[..len]);
     }
 
     pub fn set_language(&mut self, language: &str) {
         let ascii = language.as_bytes();
         let len = ascii.len().min(LANGUAGE_LENGTH);
-        
+
         self.language[..len].copy_from_slice(&ascii[..len]);
     }
 
-    pub fn set_dependencies(&mut self, file_name: &str, dependencies: &[&str]) -> Result<(), String> {
+    pub fn set_dependencies(
+        &mut self,
+        file_name: &str,
+        dependencies: &[&str],
+    ) -> Result<(), String> {
         let dependency_count = dependencies.len();
         if dependency_count > MAX_DEPENDENCIES as usize {
-            return Err(format!("File {} has too many bank dependencies. Maximum of {} allowed.", file_name, MAX_DEPENDENCIES));
+            return Err(format!(
+                "File {} has too many bank dependencies. Maximum of {} allowed.",
+                file_name, MAX_DEPENDENCIES
+            ));
         }
 
         self.dependencies.fill(0);
 
         for i in 0..dependency_count {
             if dependencies[i].len() > 64 {
-                return Err(format!("Bank dependency {} on file {} is too long", i, file_name));
+                return Err(format!(
+                    "Bank dependency {} on file {} is too long",
+                    i, file_name
+                ));
             }
 
             let bytes = dependencies[i].as_bytes();
@@ -164,10 +178,16 @@ impl BankHeader {
         if self.dependency_count != 8 {
             return Err("Invalid dependency count".to_string());
         }
-        if self.entry_offset < 0 || self.entry_offset > file_size || (self.entry_offset as usize) < size_of::<BankHeader>() {
+        if self.entry_offset < 0
+            || self.entry_offset > file_size
+            || (self.entry_offset as usize) < size_of::<BankHeader>()
+        {
             return Err("Invalid entry offset".to_string());
         }
-        if self.converted_checksum_offset < 0 || self.converted_checksum_offset > file_size || (self.converted_checksum_offset as usize) < size_of::<BankHeader>() {
+        if self.converted_checksum_offset < 0
+            || self.converted_checksum_offset > file_size
+            || (self.converted_checksum_offset as usize) < size_of::<BankHeader>()
+        {
             return Err("Invalid checksum offset".to_string());
         }
         Ok(())

@@ -61,7 +61,14 @@ pub fn expand(
 
     let mut out = Vec::with_capacity(sources.len());
     for src in sources {
-        let target_name = build_target_name(env, alias, platform, language, &src, looping_override.as_ref())?;
+        let target_name = build_target_name(
+            env,
+            alias,
+            platform,
+            language,
+            &src,
+            looping_override.as_ref(),
+        )?;
         out.push(ResolvedFile {
             source_path: src,
             target_name,
@@ -70,11 +77,15 @@ pub fn expand(
     Ok(out)
 }
 
-/// If `full` is a .wav file, return [full]. If it's a directory, return every
-/// `*.wav` inside it (non-recursive). Otherwise, empty.
+fn is_supported_audio_ext(ext: Option<&str>) -> bool {
+    matches!(ext, Some("wav") | Some("flac") | Some("ogg"))
+}
+
+/// If `full` is a supported audio file, return [full]. If it's a directory,
+/// return every supported audio file inside it (non-recursive). Otherwise, empty.
 fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     if full.is_file() {
-        if full.extension().and_then(|s| s.to_str()) == Some("wav") {
+        if is_supported_audio_ext(full.extension().and_then(|s| s.to_str())) {
             return Ok(vec![full.to_path_buf()]);
         }
         return Ok(Vec::new());
@@ -88,12 +99,9 @@ fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     {
         let entry = entry.map_err(|e| format!("read_dir entry error: {}", e))?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("wav") {
+        if is_supported_audio_ext(path.extension().and_then(|s| s.to_str())) {
             if path.to_string_lossy().contains(' ') {
-                return Err(format!(
-                    "filename contains a space: {}",
-                    path.display()
-                ));
+                return Err(format!("filename contains a space: {}", path.display()));
             }
             files.push(path);
         }
@@ -116,9 +124,7 @@ fn build_target_name(
         .storage
         .as_ref()
         .ok_or_else(|| format!("alias '{}' missing Storage", alias.name))?;
-    let looping = looping_override.unwrap_or_else(|| {
-        alias.looping.as_ref().unwrap()
-    });
+    let looping = looping_override.unwrap_or_else(|| alias.looping.as_ref().unwrap());
     let compression = alias
         .compression
         .ok_or_else(|| format!("alias '{}' missing Compression", alias.name))?;
@@ -151,7 +157,10 @@ fn build_target_name(
     // If the last `.` appears before the last separator, there's no extension.
     let last_sep = rel_str.rfind('\\');
     if last_sep.map(|s| s > last_dot).unwrap_or(false) {
-        return Err(format!("source path has no extension: {}", source.display()));
+        return Err(format!(
+            "source path has no extension: {}",
+            source.display()
+        ));
     }
     rel_str.truncate(last_dot);
     let suffix = format!(
@@ -166,14 +175,24 @@ fn build_target_name(
 /// path, leaving only the portion relative to the asset root.
 fn strip_asset_root_prefix(env: &Env, path: &Path, language: &str) -> PathBuf {
     let s_forward = path.to_string_lossy().replace('\\', "/");
-    let localized_root = env.get_source_asset_dir(true).to_string_lossy().replace('\\', "/");
-    let shared_root = env.get_source_asset_dir(false).to_string_lossy().replace('\\', "/");
+    let localized_root = env
+        .get_source_asset_dir(true)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let shared_root = env
+        .get_source_asset_dir(false)
+        .to_string_lossy()
+        .replace('\\', "/");
 
     let mut s = s_forward.as_str();
-    if s.to_ascii_lowercase().starts_with(&localized_root.to_ascii_lowercase()) {
+    if s.to_ascii_lowercase()
+        .starts_with(&localized_root.to_ascii_lowercase())
+    {
         s = &s[localized_root.len()..];
     }
-    if s.to_ascii_lowercase().starts_with(&shared_root.to_ascii_lowercase()) {
+    if s.to_ascii_lowercase()
+        .starts_with(&shared_root.to_ascii_lowercase())
+    {
         s = &s[shared_root.len()..];
     }
     // Strip leading separators.
@@ -182,7 +201,9 @@ fn strip_asset_root_prefix(env: &Env, path: &Path, language: &str) -> PathBuf {
     }
     // Strip leading language segment.
     let lang_prefix = format!("{}/", language);
-    if s.to_ascii_lowercase().starts_with(&lang_prefix.to_ascii_lowercase()) {
+    if s.to_ascii_lowercase()
+        .starts_with(&lang_prefix.to_ascii_lowercase())
+    {
         s = &s[lang_prefix.len()..];
     }
     // Strip leading separators again for good measure.
@@ -191,4 +212,3 @@ fn strip_asset_root_prefix(env: &Env, path: &Path, language: &str) -> PathBuf {
     }
     PathBuf::from(s)
 }
-

@@ -1,9 +1,37 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
+use crate::converter::CompressionLevel;
 use crate::tables::alias_enums::{
     AliasBehavior, AliasBus, AliasFluxType, AliasLimitType, AliasLooping, AliasStorage,
 };
 use crate::tables::{bool_from_string, empty_as_none, opt_enum_upper};
+
+/// CSV cell parser for the optional per-alias `CompressionLevel` override.
+///
+/// Returns `None` when the cell is absent / blank / `default` / `yes`,
+/// which tells [`crate::sound_zone::SoundZone::generate`] to fall back to
+/// the zone's `DefaultAudioCompression`. Returns `Some(level)` only when
+/// the cell explicitly names a level; `no` is accepted as a friendly
+/// spelling of `None` so designers can disable compression on a single
+/// alias without thinking about enum names.
+fn alias_compression_level<'de, D>(deserializer: D) -> Result<Option<CompressionLevel>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw: String = Deserialize::deserialize(deserializer)?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    match trimmed.to_ascii_lowercase().as_str() {
+        "default" | "yes" => Ok(None),
+        "no" => Ok(Some(CompressionLevel::None)),
+        other => other
+            .parse::<CompressionLevel>()
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct RowAlias {
@@ -91,10 +119,18 @@ pub struct RowAlias {
     #[serde(rename = "LimitType", default, deserialize_with = "opt_enum_upper")]
     pub limit_type: Option<AliasLimitType>,
 
-    #[serde(rename = "EntityLimitCount", default, deserialize_with = "empty_as_none")]
+    #[serde(
+        rename = "EntityLimitCount",
+        default,
+        deserialize_with = "empty_as_none"
+    )]
     pub entity_limit_count: Option<i32>,
 
-    #[serde(rename = "EntityLimitType", default, deserialize_with = "opt_enum_upper")]
+    #[serde(
+        rename = "EntityLimitType",
+        default,
+        deserialize_with = "opt_enum_upper"
+    )]
     pub entity_limit_type: Option<AliasLimitType>,
 
     #[serde(rename = "PitchMin", default, deserialize_with = "empty_as_none")]
@@ -109,13 +145,25 @@ pub struct RowAlias {
     #[serde(rename = "PriorityMax", default, deserialize_with = "empty_as_none")]
     pub priority_max: Option<i32>,
 
-    #[serde(rename = "PriorityThresholdMin", default, deserialize_with = "empty_as_none")]
+    #[serde(
+        rename = "PriorityThresholdMin",
+        default,
+        deserialize_with = "empty_as_none"
+    )]
     pub priority_threshold_min: Option<f32>,
 
-    #[serde(rename = "PriorityThresholdMax", default, deserialize_with = "empty_as_none")]
+    #[serde(
+        rename = "PriorityThresholdMax",
+        default,
+        deserialize_with = "empty_as_none"
+    )]
     pub priority_threshold_max: Option<f32>,
 
-    #[serde(rename = "AmplitudePriority", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "AmplitudePriority",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub amplitude_priority: bool,
 
     #[serde(rename = "PanType", default)]
@@ -211,11 +259,28 @@ pub struct RowAlias {
     #[serde(rename = "Pauseable", default, deserialize_with = "bool_from_string")]
     pub pauseable: bool,
 
-    #[serde(rename = "StopOnEntDeath", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "StopOnEntDeath",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub stop_on_ent_death: bool,
 
     #[serde(rename = "Compression", default, deserialize_with = "empty_as_none")]
     pub compression: Option<i32>,
+
+    /// Per-alias lossy-compression override. `None` (the field is absent
+    /// from the CSV, or the cell is blank, or the cell says `default` /
+    /// `yes`) means "defer to the zone's `DefaultAudioCompression`". A
+    /// `Some(level)` explicitly overrides the zone default — including
+    /// `Some(None)` via the literal `no` / `none`, which forces no lossy
+    /// processing even when the zone default is aggressive.
+    #[serde(
+        rename = "CompressionLevel",
+        default,
+        deserialize_with = "alias_compression_level"
+    )]
+    pub compression_level: Option<CompressionLevel>,
 
     #[serde(rename = "StopOnPlay", default)]
     pub stop_on_play: String,
@@ -229,13 +294,25 @@ pub struct RowAlias {
     #[serde(rename = "VoiceLimit", default, deserialize_with = "bool_from_string")]
     pub voice_limit: bool,
 
-    #[serde(rename = "IgnoreMaxDist", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "IgnoreMaxDist",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub ignore_max_dist: bool,
 
-    #[serde(rename = "NeverPlayTwice", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "NeverPlayTwice",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub never_play_twice: bool,
 
-    #[serde(rename = "ContinuousPan", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "ContinuousPan",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub continuous_pan: bool,
 
     #[serde(rename = "FileSource", default)]
@@ -283,13 +360,21 @@ pub struct RowAlias {
     #[serde(rename = "FacialAnimationName", default)]
     pub facial_animation_name: String,
 
-    #[serde(rename = "RestartContextLoops", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "RestartContextLoops",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub restart_context_loops: bool,
 
     #[serde(rename = "SilentInCPZ", default, deserialize_with = "bool_from_string")]
     pub silent_in_cpz: bool,
 
-    #[serde(rename = "ContextFailsafe", default, deserialize_with = "bool_from_string")]
+    #[serde(
+        rename = "ContextFailsafe",
+        default,
+        deserialize_with = "bool_from_string"
+    )]
     pub context_failsafe: bool,
 
     #[serde(rename = "GPAD", default, deserialize_with = "bool_from_string")]
@@ -310,7 +395,11 @@ pub struct RowAlias {
     #[serde(rename = "RowSourceShortName", default)]
     pub row_source_short_name: String,
 
-    #[serde(rename = "RowSourceLineNumber", default, deserialize_with = "empty_as_none")]
+    #[serde(
+        rename = "RowSourceLineNumber",
+        default,
+        deserialize_with = "empty_as_none"
+    )]
     pub row_source_line_number: Option<i32>,
 }
 
@@ -388,26 +477,88 @@ impl RowAlias {
                 })?;
 
             merge_str!(
-                self, tmpl,
-                file_spec, file_spec_sustain, file_spec_release, loadspec, secondary,
-                sustain_alias, release_alias, volume_group, duck_group, duck,
-                dry_min_curve, dry_max_curve, wet_min_curve, wet_max_curve,
-                pan_type, pan, randomize_type, subtitle,
-                context_type, context_value, context_type_1, context_value_1,
-                context_type_2, context_value_2, context_type_3, context_value_3,
-                stop_on_play, futz_patch, file_source, file_source_sustain, file_source_release,
-                file_target, file_target_sustain, file_target_release,
-                platform, language, output_devices, platform_mask, stop_alias,
+                self,
+                tmpl,
+                file_spec,
+                file_spec_sustain,
+                file_spec_release,
+                loadspec,
+                secondary,
+                sustain_alias,
+                release_alias,
+                volume_group,
+                duck_group,
+                duck,
+                dry_min_curve,
+                dry_max_curve,
+                wet_min_curve,
+                wet_max_curve,
+                pan_type,
+                pan,
+                randomize_type,
+                subtitle,
+                context_type,
+                context_value,
+                context_type_1,
+                context_value_1,
+                context_type_2,
+                context_value_2,
+                context_type_3,
+                context_value_3,
+                stop_on_play,
+                futz_patch,
+                file_source,
+                file_source_sustain,
+                file_source_release,
+                file_target,
+                file_target_sustain,
+                file_target_release,
+                platform,
+                language,
+                output_devices,
+                platform_mask,
+                stop_alias,
                 facial_animation_name,
             );
             merge_opt!(
-                self, tmpl,
-                behavior, storage, bus, limit_type, entity_limit_type, looping, flux_type,
-                reverb_send, center_send, vol_min, vol_max, dist_min, dist_max_dry, dist_max_wet,
-                limit_count, entity_limit_count, pitch_min, pitch_max, priority_min, priority_max,
-                priority_threshold_min, priority_threshold_max, probability, start_delay,
-                envelop_min, envelop_max, envelop_percent, occlusion_level, flux_time,
-                fade_in, fade_out, compression, doppler_scale, distance_lpf_min, distance_lpf_max,
+                self,
+                tmpl,
+                behavior,
+                storage,
+                bus,
+                limit_type,
+                entity_limit_type,
+                looping,
+                flux_type,
+                reverb_send,
+                center_send,
+                vol_min,
+                vol_max,
+                dist_min,
+                dist_max_dry,
+                dist_max_wet,
+                limit_count,
+                entity_limit_count,
+                pitch_min,
+                pitch_max,
+                priority_min,
+                priority_max,
+                priority_threshold_min,
+                priority_threshold_max,
+                probability,
+                start_delay,
+                envelop_min,
+                envelop_max,
+                envelop_percent,
+                occlusion_level,
+                flux_time,
+                fade_in,
+                fade_out,
+                compression,
+                compression_level,
+                doppler_scale,
+                distance_lpf_min,
+                distance_lpf_max,
             );
             // Bool fields: we can't distinguish "unset" from "false" without
             // Option<bool>, so the rule is "if the alias is false, inherit".
@@ -422,18 +573,35 @@ impl RowAlias {
                 };
             }
             merge_bool!(
-                amplitude_priority, futz, is_big, distance_lpf, doppler, timescale,
-                is_music, is_cinematic, pauseable, stop_on_ent_death, voice_limit,
-                ignore_max_dist, never_play_twice, continuous_pan, wii_u_mono,
-                restart_context_loops, silent_in_cpz, context_failsafe, gpad, gpad_only,
-                mute_voice, mute_music,
+                amplitude_priority,
+                futz,
+                is_big,
+                distance_lpf,
+                doppler,
+                timescale,
+                is_music,
+                is_cinematic,
+                pauseable,
+                stop_on_ent_death,
+                voice_limit,
+                ignore_max_dist,
+                never_play_twice,
+                continuous_pan,
+                wii_u_mono,
+                restart_context_loops,
+                silent_in_cpz,
+                context_failsafe,
+                gpad,
+                gpad_only,
+                mute_voice,
+                mute_music,
             );
         }
 
         // Hard-coded column defaults. Only the handful that gate the pipeline
         // (filespec expansion / bank writes) — the rest can be added if
         // validation trips on them.
-        use crate::tables::alias_enums::{AliasLooping, AliasStorage, AliasBus};
+        use crate::tables::alias_enums::{AliasBus, AliasLooping, AliasStorage};
         if self.storage.is_none() {
             self.storage = Some(AliasStorage::Loaded);
         }
@@ -493,30 +661,74 @@ impl RowAlias {
         }
 
         fn check_pair<T: PartialOrd + std::fmt::Debug>(
-            name: &str, a: Option<T>, b: Option<T>, a_label: &str, b_label: &str,
+            name: &str,
+            a: Option<T>,
+            b: Option<T>,
+            a_label: &str,
+            b_label: &str,
         ) -> Result<(), String> {
             if let (Some(a), Some(b)) = (a, b) {
                 if a > b {
-                    return Err(format!("'{}': {} ({:?}) > {} ({:?})", name, a_label, a, b_label, b));
+                    return Err(format!(
+                        "'{}': {} ({:?}) > {} ({:?})",
+                        name, a_label, a, b_label, b
+                    ));
                 }
             }
             Ok(())
         }
 
-        check_pair(&self.name, self.dist_min, self.dist_max_dry, "DistMin", "DistMaxDry")?;
-        check_pair(&self.name, self.dist_min, self.dist_max_wet, "DistMin", "DistMaxWet")?;
-        check_pair(&self.name, self.dist_max_dry, self.dist_max_wet, "DistMaxDry", "DistMaxWet")?;
-        check_pair(&self.name, self.pitch_min, self.pitch_max, "PitchMin", "PitchMax")?;
-        check_pair(&self.name, self.envelop_min, self.envelop_max, "EnvelopMin", "EnvelopMax")?;
+        check_pair(
+            &self.name,
+            self.dist_min,
+            self.dist_max_dry,
+            "DistMin",
+            "DistMaxDry",
+        )?;
+        check_pair(
+            &self.name,
+            self.dist_min,
+            self.dist_max_wet,
+            "DistMin",
+            "DistMaxWet",
+        )?;
+        check_pair(
+            &self.name,
+            self.dist_max_dry,
+            self.dist_max_wet,
+            "DistMaxDry",
+            "DistMaxWet",
+        )?;
+        check_pair(
+            &self.name,
+            self.pitch_min,
+            self.pitch_max,
+            "PitchMin",
+            "PitchMax",
+        )?;
+        check_pair(
+            &self.name,
+            self.envelop_min,
+            self.envelop_max,
+            "EnvelopMin",
+            "EnvelopMax",
+        )?;
         check_pair(&self.name, self.vol_min, self.vol_max, "VolMin", "VolMax")?;
-        check_pair(&self.name, self.priority_threshold_min, self.priority_threshold_max,
-                   "PriorityThresholdMin", "PriorityThresholdMax")?;
+        check_pair(
+            &self.name,
+            self.priority_threshold_min,
+            self.priority_threshold_max,
+            "PriorityThresholdMin",
+            "PriorityThresholdMax",
+        )?;
 
         // 3D alias with PRIORITY limit type must have differing Priority min/max.
         let is_priority_limit = matches!(
-            self.limit_type, Some(crate::tables::alias_enums::AliasLimitType::Priority)
+            self.limit_type,
+            Some(crate::tables::alias_enums::AliasLimitType::Priority)
         ) || matches!(
-            self.entity_limit_type, Some(crate::tables::alias_enums::AliasLimitType::Priority)
+            self.entity_limit_type,
+            Some(crate::tables::alias_enums::AliasLimitType::Priority)
         );
         let is_spatial = self.pan_type == "3d" || self.pan_type == "2.5d";
         if is_priority_limit && is_spatial {
@@ -535,8 +747,8 @@ impl RowAlias {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use crate::tables::load_table_relaxed;
+    use std::path::Path;
 
     #[test]
     fn expand_and_validate_real_aliases() {

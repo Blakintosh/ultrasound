@@ -3,6 +3,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::converter::CompressionLevel;
+
 #[derive(Deserialize, Default)]
 pub struct SoundZoneConfig {
     #[serde(rename = "Name")]
@@ -25,6 +27,12 @@ pub struct SoundZoneConfig {
     pub ducks: Vec<String>,
     #[serde(rename = "MusicFiles", default)]
     pub music_files: Vec<String>,
+    /// Default lossy-compression level applied to every asset in this
+    /// zone unless overridden per-alias. Omitted/absent → `None` (no
+    /// lossy processing). Valid values (case-invariant): `None`, `Low`,
+    /// `Medium`, `High`, `Extreme`.
+    #[serde(rename = "DefaultAudioCompression", default)]
+    pub default_audio_compression: CompressionLevel,
 }
 
 impl SoundZoneConfig {
@@ -57,6 +65,13 @@ pub struct SoundZoneSource {
     pub filename: String,
     #[serde(rename = "Specs", default)]
     pub specs: HashSet<String>,
+    /// Source-entry override for the zone's `DefaultAudioCompression`.
+    /// Applies to every alias inside this source's CSV that doesn't have
+    /// its own `CompressionLevel` column set. Alias row overrides still
+    /// win, so per-entry tuning (e.g. VO vs SFX inside the same file) is
+    /// still possible. Absent → inherit the zone default.
+    #[serde(rename = "DefaultAudioCompression", default)]
+    pub default_audio_compression: Option<CompressionLevel>,
 }
 
 #[derive(Deserialize)]

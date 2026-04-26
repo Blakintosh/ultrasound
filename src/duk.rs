@@ -38,7 +38,9 @@ pub struct Duck {
     pub values: Vec<DuckValue>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Deserialize)]
 pub struct DuckValue {
@@ -61,8 +63,7 @@ impl Duck {
         }
         let text = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-        json5::from_str(&text)
-            .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+        json5::from_str(&text).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 }
 
@@ -75,9 +76,16 @@ mod tests {
         let duck = Duck::load(Path::new("test_data/blak_health_low.duk")).expect("load");
         assert!(!duck.name.is_empty());
         assert!(!duck.values.is_empty());
-        println!("Loaded duck '{}' with {} values", duck.name, duck.values.len());
+        println!(
+            "Loaded duck '{}' with {} values",
+            duck.name,
+            duck.values.len()
+        );
         for v in duck.values.iter().take(3) {
-            println!("  {} group={} lpf={} atten={}", v.name, v.duck_group, v.lpf, v.attenuation);
+            println!(
+                "  {} group={} lpf={} atten={}",
+                v.name, v.duck_group, v.lpf, v.attenuation
+            );
         }
     }
 }

@@ -103,8 +103,7 @@ impl MusicSet {
         }
         let text = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-        json5::from_str(&text)
-            .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+        json5::from_str(&text).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 }
 

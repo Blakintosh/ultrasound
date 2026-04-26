@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use crate::tables::bool_from_string;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct RowAmbient {
@@ -37,9 +37,15 @@ pub struct RowAmbient {
     pub global_context_value: String,
 }
 
-fn default_reverb() -> String { "default".to_string() }
-fn default_default() -> String { "default".to_string() }
-fn default_one() -> f32 { 1.0 }
+fn default_reverb() -> String {
+    "default".to_string()
+}
+fn default_default() -> String {
+    "default".to_string()
+}
+fn default_one() -> f32 {
+    1.0
+}
 
 impl crate::tables::Row for RowAmbient {
     fn get_row_name(&self) -> &str {
@@ -50,8 +56,8 @@ impl crate::tables::Row for RowAmbient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
     use crate::tables::load_table;
+    use std::path::Path;
 
     #[test]
     fn load_real_ambient_csv() {
@@ -60,7 +66,10 @@ mod tests {
         assert!(!rows.is_empty(), "should have at least one row");
         println!("Loaded {} ambients", rows.len());
         for r in rows.iter().take(3) {
-            println!("  {} reverb={} loop={} default_room={}", r.name, r.reverb, r.loop_, r.default_room);
+            println!(
+                "  {} reverb={} loop={} default_room={}",
+                r.name, r.reverb, r.loop_, r.default_room
+            );
         }
     }
 }

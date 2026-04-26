@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use crate::converted_asset_cache::ConvertedAssetCache;
 use crate::env::Env;
 use crate::source_asset_cache::SourceAssetCache;
-use crate::tables::{load_table, load_table_relaxed};
 use crate::tables::row_alias::RowAlias;
 use crate::tables::row_locale::RowLocale;
 use crate::tables::row_platform::RowPlatform;
+use crate::tables::{load_table, load_table_relaxed};
 
 /// Per-run global state. Holds everything loaded once at startup and borrowed
 /// mutably through the pipeline (source cache gets updated; template map is
@@ -22,12 +22,9 @@ pub struct SoundDataSnapshot {
 
 impl SoundDataSnapshot {
     pub fn new(env: Env) -> Result<Self, String> {
-        let platforms = load_table::<RowPlatform>(
-            &env.get_sound_globals_dir().join("platform.csv"),
-        )?;
-        let locales = load_table::<RowLocale>(
-            &env.get_sound_globals_dir().join("locale.csv"),
-        )?;
+        let platforms =
+            load_table::<RowPlatform>(&env.get_sound_globals_dir().join("platform.csv"))?;
+        let locales = load_table::<RowLocale>(&env.get_sound_globals_dir().join("locale.csv"))?;
 
         let alias_templates = load_alias_templates(&env)?;
 

@@ -11,10 +11,7 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     // OUT_DIR is something like target/debug/build/ultrasound-xxx/out
     // The exe lands in target/debug/, so go up 3 levels
-    let target_dir = Path::new(&out_dir)
-        .ancestors()
-        .nth(3)
-        .unwrap();
+    let target_dir = Path::new(&out_dir).ancestors().nth(3).unwrap();
 
     let src = Path::new(manifest_dir).join("lib/libFLAC.dll");
     let dst = target_dir.join("libFLAC.dll");

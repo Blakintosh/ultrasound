@@ -1,4 +1,4 @@
-use crate::{riff::Riff, units::linear_to_db_spl};
+use crate::units::linear_to_db_spl;
 
 pub struct AssetEnvelope {
     pub left: Vec<f64>,
@@ -8,15 +8,17 @@ pub struct AssetEnvelope {
 const ENVELOPE_BUCKET_SIZE: usize = 512;
 
 impl AssetEnvelope {
-    pub fn envelope_extract(riff: &Riff, samples: &[i16]) -> AssetEnvelope {
-        let bucket_count = (riff.frame_count / ENVELOPE_BUCKET_SIZE as u64) as usize;
+    pub fn envelope_extract(
+        frame_count: u64,
+        channel_count: u16,
+        samples: &[i16],
+    ) -> AssetEnvelope {
+        let bucket_count = (frame_count / ENVELOPE_BUCKET_SIZE as u64) as usize;
 
         // If at or below bucket size, return a more basic envelope.
         if bucket_count <= 1 {
-            let peak = samples.iter()
-                .map(|&x| x.unsigned_abs())
-                .max()
-                .unwrap_or(0) as f64 / 32768.0;
+            let peak =
+                samples.iter().map(|&x| x.unsigned_abs()).max().unwrap_or(0) as f64 / 32768.0;
 
             return AssetEnvelope {
                 left: vec![peak, peak, peak, peak],
@@ -31,9 +33,9 @@ impl AssetEnvelope {
         for i in 0..bucket_count {
             let base_offset = i * ENVELOPE_BUCKET_SIZE;
 
-            for j in 0..riff.channel_count as usize {
+            for j in 0..channel_count as usize {
                 for k in 0..ENVELOPE_BUCKET_SIZE {
-                    let read_offset = (base_offset + k) * riff.channel_count as usize + j;
+                    let read_offset = (base_offset + k) * channel_count as usize + j;
                     buckets[i] = buckets[i].max((samples[read_offset] as f64).abs());
                 }
             }
@@ -91,7 +93,8 @@ impl AssetEnvelope {
                     smoothed[left_idx] = buckets[left_idx];
                 } else {
                     let t = (i - left_idx) as f64 / (right_idx - left_idx) as f64;
-                    smoothed[i] = (buckets[left_idx] * (1.0 - t) + buckets[right_idx] * t) as i32 as f64;
+                    smoothed[i] =
+                        (buckets[left_idx] * (1.0 - t) + buckets[right_idx] * t) as i32 as f64;
                 }
             }
 
@@ -171,7 +174,7 @@ impl AssetEnvelope {
                     continue;
                 }
                 let t = (i - points[seg]) as f64 / span as f64;
-                let interpolated = self.time[seg] * (1.0 - t) + self.time[seg + 1] * t;
+                let interpolated = self.left[seg] * (1.0 - t) + self.left[seg + 1] * t;
                 error += (interpolated - buckets[i]).powi(2);
             }
         }
@@ -190,4 +193,26 @@ fn add_maxima(buckets: &[f64], maxima: &mut Vec<usize>, i: usize) {
         }
     }
     maxima.push(i);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eval_scores_loudness_not_time() {
+        let buckets = [0.0, 10.0, 20.0, 30.0, 60.0];
+        let time = vec![0.0, 0.5, 0.75, 1.0];
+
+        let matching = AssetEnvelope {
+            left: vec![0.0, 20.0, 30.0, 60.0],
+            time: time.clone(),
+        };
+        let wrong_loudness = AssetEnvelope {
+            left: vec![60.0, 30.0, 20.0, 0.0],
+            time,
+        };
+
+        assert!(matching.eval(&buckets) < wrong_loudness.eval(&buckets));
+    }
 }
