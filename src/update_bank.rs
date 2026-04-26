@@ -6,10 +6,7 @@ use rayon::prelude::*;
 
 use crate::bank::bank_header::BankHeader;
 use crate::bank::sound_asset_bank::SoundAssetBank;
-use crate::converter::{
-    CompressionLevel, SoundAssetBankConvertedAsset, SoundAssetBankSourceAsset,
-    convert_source_inline,
-};
+use crate::converter::{SoundAssetBankConvertedAsset, convert_source_inline};
 use crate::obtainer::SoundAssetObtainer;
 use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
@@ -18,11 +15,14 @@ use crate::string_hash;
 
 /// Soft cap on a loaded bank (`.sabl`). Exact engine limit is unknown;
 /// 600 MB is a conservative guess used only to surface a warning.
+#[cfg(any())]
 const SABL_LIMIT_BYTES: u64 = 600 * 1_000 * 1_000;
 /// Soft cap on a streamed bank (`.sabs`). Exact engine limit is unknown.
+#[cfg(any())]
 const SABS_LIMIT_BYTES: u64 = 4 * 1_000 * 1_000 * 1_000;
 /// Percent-of-limit at which we print a warning with a compression-tuning
 /// hint.
+#[cfg(any())]
 const BANK_WARN_THRESHOLD_PCT: u64 = 85;
 
 /// Build (or update) a bank file for one zone+platform+language+storage-class.
@@ -161,7 +161,8 @@ pub fn update_bank(
         println!("  {}.{}: up to date", base_name, ext);
         // Still deploy in case the ship copy is missing.
         deploy(&cache_path, &ship_path)?;
-        check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
+        // Bank size warnings are disabled until the real limits are known.
+        // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
         return Ok(());
     }
     println!(
@@ -198,7 +199,8 @@ pub fn update_bank(
 
     // 4. Deploy cache → ship.
     deploy(&cache_path, &ship_path)?;
-    check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
+    // Bank size warnings are disabled until the real limits are known.
+    // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
     Ok(())
 }
 
@@ -206,6 +208,7 @@ pub fn update_bank(
 /// The exact engine limit isn't known, so this never errors — it just
 /// surfaces a hint so the user can tune DefaultAudioCompression before
 /// they hit a wall in-game.
+#[cfg(any())]
 fn check_bank_size(
     cache_path: &PathBuf,
     streamed: bool,

@@ -174,7 +174,7 @@ impl AssetEnvelope {
                     continue;
                 }
                 let t = (i - points[seg]) as f64 / span as f64;
-                let interpolated = self.time[seg] * (1.0 - t) + self.time[seg + 1] * t;
+                let interpolated = self.left[seg] * (1.0 - t) + self.left[seg + 1] * t;
                 error += (interpolated - buckets[i]).powi(2);
             }
         }
@@ -193,4 +193,26 @@ fn add_maxima(buckets: &[f64], maxima: &mut Vec<usize>, i: usize) {
         }
     }
     maxima.push(i);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eval_scores_loudness_not_time() {
+        let buckets = [0.0, 10.0, 20.0, 30.0, 60.0];
+        let time = vec![0.0, 0.5, 0.75, 1.0];
+
+        let matching = AssetEnvelope {
+            left: vec![0.0, 20.0, 30.0, 60.0],
+            time: time.clone(),
+        };
+        let wrong_loudness = AssetEnvelope {
+            left: vec![60.0, 30.0, 20.0, 0.0],
+            time,
+        };
+
+        assert!(matching.eval(&buckets) < wrong_loudness.eval(&buckets));
+    }
 }

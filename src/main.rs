@@ -28,6 +28,8 @@ use sound_zone::SoundZone;
 use sound_zone_config::SoundZoneConfig;
 use update_bank::update_bank;
 
+const RAW_ARG_USAGE: &str = "Expected raw args: <platform> <platform_working_dir> <unused> <action> <source_dir> [action args...]";
+
 #[derive(Parser)]
 struct Args {
     /// Enable detailed output
@@ -42,6 +44,7 @@ struct Args {
     raw_args: Vec<String>,
 }
 
+#[derive(Debug)]
 enum Action {
     ZoneSources {
         platform: String,
@@ -61,19 +64,29 @@ enum Action {
 }
 
 fn main() {
-    let args = Args::parse();
-
-    let env =
-        Env::new(&args.raw_args[1], &args.raw_args[4]).expect("Failed to initialize environment");
-
-    let mut snapshot = SoundDataSnapshot::new(env).expect("Failed to build sound data snapshot");
-
-    let action = parse_action(&snapshot, &args.raw_args).expect("Failed to parse action");
-
-    if let Err(e) = run(&mut snapshot, action) {
+    if let Err(e) = try_main() {
         eprintln!("error: {}", e);
         std::process::exit(1);
     }
+}
+
+fn try_main() -> Result<(), String> {
+    let args = Args::parse();
+    let (platform_working_dir, source_dir) = env_args(&args.raw_args)?;
+
+    let env = Env::new(platform_working_dir, source_dir)?;
+    let mut snapshot = SoundDataSnapshot::new(env)?;
+
+    let action = parse_action(&snapshot, &args.raw_args)?;
+
+    run(&mut snapshot, action)
+}
+
+fn env_args(raw: &[String]) -> Result<(&str, &str), String> {
+    if raw.len() < 5 {
+        return Err(format!("Not enough arguments. {}", RAW_ARG_USAGE));
+    }
+    Ok((&raw[1], &raw[4]))
 }
 
 fn run(snapshot: &mut SoundDataSnapshot, action: Action) -> Result<(), String> {
@@ -147,21 +160,20 @@ fn single_zone(
 }
 
 fn parse_action(snapshot: &SoundDataSnapshot, raw: &[String]) -> Result<Action, String> {
-    if raw.is_empty() {
-        return Err("Missing action. Specify one of: sound_zone, zone_sources, zone_source, production or all.".to_string());
-    }
-    if raw.len() < 4 {
-        return Err("Not enough arguments.".to_string());
-    }
+    let locale_names: Vec<&str> = snapshot.locales.iter().map(|l| l.name.as_str()).collect();
+    parse_action_with_locales(&locale_names, raw)
+}
 
-    match raw[3].as_str() {
+fn parse_action_with_locales(locale_names: &[&str], raw: &[String]) -> Result<Action, String> {
+    let action = raw
+        .get(3)
+        .ok_or_else(|| format!("Missing action. {}", RAW_ARG_USAGE))?;
+
+    match action.as_str() {
         "zone_source" | "zone_sources" => {
-            let locale_names: Vec<&str> =
-                snapshot.locales.iter().map(|l| l.name.as_str()).collect();
-
             let mut languages = Vec::new();
             let mut zones = Vec::new();
-            for arg in &raw[5..] {
+            for arg in raw.get(5..).unwrap_or(&[]) {
                 if locale_names.contains(&arg.as_str()) {
                     languages.push(arg.clone());
                 } else {
@@ -178,7 +190,7 @@ fn parse_action(snapshot: &SoundDataSnapshot, raw: &[String]) -> Result<Action, 
         "sound_zone" => Ok(Action::SoundZone {
             zone: raw.get(5).ok_or("Missing zone")?.clone(),
             platform: raw[0].clone(),
-            languages: raw[6..].to_vec(),
+            languages: raw.get(6..).unwrap_or(&[]).to_vec(),
         }),
         "production" => Ok(Action::Production {
             platform: raw[0].clone(),
@@ -186,5 +198,66 @@ fn parse_action(snapshot: &SoundDataSnapshot, raw: &[String]) -> Result<Action, 
         }),
         "all" => Ok(Action::All),
         other => Err(format!("Unknown action: {}", other)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| (*v).to_string()).collect()
+    }
+
+    #[test]
+    fn env_args_rejects_short_invocation() {
+        let raw = args(&["pc", "pc"]);
+        let err = env_args(&raw).expect_err("short raw args should fail");
+
+        assert!(err.contains("Not enough arguments"));
+    }
+
+    #[test]
+    fn parse_action_rejects_missing_action() {
+        let raw = args(&["pc", "zone", "unused"]);
+        let err = parse_action_with_locales(&["all"], &raw).expect_err("missing action");
+
+        assert!(err.contains("Missing action"));
+    }
+
+    #[test]
+    fn parse_sound_zone_without_zone_is_error() {
+        let raw = args(&["pc", "zone", "unused", "sound_zone", "src"]);
+        let err = parse_action_with_locales(&["all"], &raw).expect_err("missing zone");
+
+        assert_eq!(err, "Missing zone");
+    }
+
+    #[test]
+    fn parse_zone_sources_partitions_locales_and_zones() {
+        let raw = args(&[
+            "pc",
+            "zone",
+            "unused",
+            "zone_sources",
+            "src",
+            "zm_test",
+            "all",
+            "en",
+        ]);
+        let action = parse_action_with_locales(&["all", "en"], &raw).expect("parse action");
+
+        match action {
+            Action::ZoneSources {
+                platform,
+                languages,
+                zones,
+            } => {
+                assert_eq!(platform, "pc");
+                assert_eq!(languages, vec!["all", "en"]);
+                assert_eq!(zones, vec!["zm_test"]);
+            }
+            _ => panic!("expected zone sources action"),
+        }
     }
 }
