@@ -146,7 +146,7 @@ fn build_target_name(
     // is the path relative to the asset root. Pure string manipulation — no
     // PathBuf::join, which produces mixed separators on Windows when the base
     // path already contains forward slashes.
-    let rel = strip_asset_root_prefix(env, source, &language.name);
+    let rel = strip_asset_root_prefix(env, source, &language.search_name);
     // Canonicalize separators to '\' (the on-disk bank format uses backslashes).
     let mut rel_str = rel.to_string_lossy().replace('/', "\\");
     // Replace the trailing `.wav` (or whatever extension) with the suffix.

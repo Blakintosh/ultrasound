@@ -4,7 +4,7 @@ use crate::converter::CompressionLevel;
 use crate::tables::alias_enums::{
     AliasBehavior, AliasBus, AliasFluxType, AliasLimitType, AliasLooping, AliasStorage,
 };
-use crate::tables::{bool_from_string, empty_as_none, opt_enum_upper};
+use crate::tables::{empty_as_none, opt_enum_upper};
 
 /// CSV cell parser for the optional per-alias `CompressionLevel` override.
 ///
@@ -30,6 +30,35 @@ where
             .parse::<CompressionLevel>()
             .map(Some)
             .map_err(serde::de::Error::custom),
+    }
+}
+
+fn bool_from_string(s: &str) -> Result<bool, String> {
+    if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes") || s == "1" {
+        Ok(true)
+    } else if s.eq_ignore_ascii_case("false")
+        || s.eq_ignore_ascii_case("no")
+        || s == "0"
+        || s.is_empty()
+    {
+        Ok(false)
+    } else {
+        Err(format!("invalid bool: {}", s))
+    }
+}
+
+fn empty_as_none_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw: String = Deserialize::deserialize(deserializer)?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        bool_from_string(trimmed)
+            .map(Some)
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -162,9 +191,9 @@ pub struct RowAlias {
     #[serde(
         rename = "AmplitudePriority",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub amplitude_priority: bool,
+    pub amplitude_priority: Option<bool>,
 
     #[serde(rename = "PanType", default)]
     pub pan_type: String,
@@ -172,8 +201,8 @@ pub struct RowAlias {
     #[serde(rename = "Pan", default)]
     pub pan: String,
 
-    #[serde(rename = "Futz", default, deserialize_with = "bool_from_string")]
-    pub futz: bool,
+    #[serde(rename = "Futz", default, deserialize_with = "empty_as_none_bool")]
+    pub futz: Option<bool>,
 
     #[serde(rename = "Looping", default, deserialize_with = "opt_enum_upper")]
     pub looping: Option<AliasLooping>,
@@ -199,11 +228,15 @@ pub struct RowAlias {
     #[serde(rename = "OcclusionLevel", default, deserialize_with = "empty_as_none")]
     pub occlusion_level: Option<f32>,
 
-    #[serde(rename = "IsBig", default, deserialize_with = "bool_from_string")]
-    pub is_big: bool,
+    #[serde(rename = "IsBig", default, deserialize_with = "empty_as_none_bool")]
+    pub is_big: Option<bool>,
 
-    #[serde(rename = "DistanceLpf", default, deserialize_with = "bool_from_string")]
-    pub distance_lpf: bool,
+    #[serde(
+        rename = "DistanceLpf",
+        default,
+        deserialize_with = "empty_as_none_bool"
+    )]
+    pub distance_lpf: Option<bool>,
 
     #[serde(rename = "FluxType", default, deserialize_with = "opt_enum_upper")]
     pub flux_type: Option<AliasFluxType>,
@@ -214,8 +247,8 @@ pub struct RowAlias {
     #[serde(rename = "Subtitle", default)]
     pub subtitle: String,
 
-    #[serde(rename = "Doppler", default, deserialize_with = "bool_from_string")]
-    pub doppler: bool,
+    #[serde(rename = "Doppler", default, deserialize_with = "empty_as_none_bool")]
+    pub doppler: Option<bool>,
 
     #[serde(rename = "ContextType", default)]
     pub context_type: String,
@@ -241,14 +274,18 @@ pub struct RowAlias {
     #[serde(rename = "ContextValue3", default)]
     pub context_value_3: String,
 
-    #[serde(rename = "Timescale", default, deserialize_with = "bool_from_string")]
-    pub timescale: bool,
+    #[serde(rename = "Timescale", default, deserialize_with = "empty_as_none_bool")]
+    pub timescale: Option<bool>,
 
-    #[serde(rename = "IsMusic", default, deserialize_with = "bool_from_string")]
-    pub is_music: bool,
+    #[serde(rename = "IsMusic", default, deserialize_with = "empty_as_none_bool")]
+    pub is_music: Option<bool>,
 
-    #[serde(rename = "IsCinematic", default, deserialize_with = "bool_from_string")]
-    pub is_cinematic: bool,
+    #[serde(
+        rename = "IsCinematic",
+        default,
+        deserialize_with = "empty_as_none_bool"
+    )]
+    pub is_cinematic: Option<bool>,
 
     #[serde(rename = "FadeIn", default, deserialize_with = "empty_as_none")]
     pub fade_in: Option<i32>,
@@ -256,15 +293,15 @@ pub struct RowAlias {
     #[serde(rename = "FadeOut", default, deserialize_with = "empty_as_none")]
     pub fade_out: Option<i32>,
 
-    #[serde(rename = "Pauseable", default, deserialize_with = "bool_from_string")]
-    pub pauseable: bool,
+    #[serde(rename = "Pauseable", default, deserialize_with = "empty_as_none_bool")]
+    pub pauseable: Option<bool>,
 
     #[serde(
         rename = "StopOnEntDeath",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub stop_on_ent_death: bool,
+    pub stop_on_ent_death: Option<bool>,
 
     #[serde(rename = "Compression", default, deserialize_with = "empty_as_none")]
     pub compression: Option<i32>,
@@ -291,29 +328,33 @@ pub struct RowAlias {
     #[serde(rename = "FutzPatch", default)]
     pub futz_patch: String,
 
-    #[serde(rename = "VoiceLimit", default, deserialize_with = "bool_from_string")]
-    pub voice_limit: bool,
+    #[serde(
+        rename = "VoiceLimit",
+        default,
+        deserialize_with = "empty_as_none_bool"
+    )]
+    pub voice_limit: Option<bool>,
 
     #[serde(
         rename = "IgnoreMaxDist",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub ignore_max_dist: bool,
+    pub ignore_max_dist: Option<bool>,
 
     #[serde(
         rename = "NeverPlayTwice",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub never_play_twice: bool,
+    pub never_play_twice: Option<bool>,
 
     #[serde(
         rename = "ContinuousPan",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub continuous_pan: bool,
+    pub continuous_pan: Option<bool>,
 
     #[serde(rename = "FileSource", default)]
     pub file_source: String,
@@ -345,8 +386,8 @@ pub struct RowAlias {
     #[serde(rename = "PlatformMask", default)]
     pub platform_mask: String,
 
-    #[serde(rename = "WiiUMono", default, deserialize_with = "bool_from_string")]
-    pub wii_u_mono: bool,
+    #[serde(rename = "WiiUMono", default, deserialize_with = "empty_as_none_bool")]
+    pub wii_u_mono: Option<bool>,
 
     #[serde(rename = "StopAlias", default)]
     pub stop_alias: String,
@@ -363,31 +404,35 @@ pub struct RowAlias {
     #[serde(
         rename = "RestartContextLoops",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub restart_context_loops: bool,
+    pub restart_context_loops: Option<bool>,
 
-    #[serde(rename = "SilentInCPZ", default, deserialize_with = "bool_from_string")]
-    pub silent_in_cpz: bool,
+    #[serde(
+        rename = "SilentInCPZ",
+        default,
+        deserialize_with = "empty_as_none_bool"
+    )]
+    pub silent_in_cpz: Option<bool>,
 
     #[serde(
         rename = "ContextFailsafe",
         default,
-        deserialize_with = "bool_from_string"
+        deserialize_with = "empty_as_none_bool"
     )]
-    pub context_failsafe: bool,
+    pub context_failsafe: Option<bool>,
 
-    #[serde(rename = "GPAD", default, deserialize_with = "bool_from_string")]
-    pub gpad: bool,
+    #[serde(rename = "GPAD", default, deserialize_with = "empty_as_none_bool")]
+    pub gpad: Option<bool>,
 
-    #[serde(rename = "GPADOnly", default, deserialize_with = "bool_from_string")]
-    pub gpad_only: bool,
+    #[serde(rename = "GPADOnly", default, deserialize_with = "empty_as_none_bool")]
+    pub gpad_only: Option<bool>,
 
-    #[serde(rename = "MuteVoice", default, deserialize_with = "bool_from_string")]
-    pub mute_voice: bool,
+    #[serde(rename = "MuteVoice", default, deserialize_with = "empty_as_none_bool")]
+    pub mute_voice: Option<bool>,
 
-    #[serde(rename = "MuteMusic", default, deserialize_with = "bool_from_string")]
-    pub mute_music: bool,
+    #[serde(rename = "MuteMusic", default, deserialize_with = "empty_as_none_bool")]
+    pub mute_music: Option<bool>,
 
     #[serde(rename = "RowSourceFileName", default)]
     pub row_source_file_name: String,
@@ -559,20 +604,6 @@ impl RowAlias {
                 doppler_scale,
                 distance_lpf_min,
                 distance_lpf_max,
-            );
-            // Bool fields: we can't distinguish "unset" from "false" without
-            // Option<bool>, so the rule is "if the alias is false, inherit".
-            // Matches the common case where CSVs leave the column empty (parsed as false).
-            macro_rules! merge_bool {
-                ($($field:ident),* $(,)?) => {
-                    $(
-                        if !self.$field {
-                            self.$field = tmpl.$field;
-                        }
-                    )*
-                };
-            }
-            merge_bool!(
                 amplitude_priority,
                 futz,
                 is_big,
@@ -598,22 +629,86 @@ impl RowAlias {
             );
         }
 
-        // Hard-coded column defaults. Only the handful that gate the pipeline
-        // (filespec expansion / bank writes) — the rest can be added if
-        // validation trips on them.
-        use crate::tables::alias_enums::{AliasBus, AliasLooping, AliasStorage};
-        if self.storage.is_none() {
-            self.storage = Some(AliasStorage::Loaded);
+        macro_rules! default_opt {
+            ($field:ident, $value:expr) => {
+                if self.$field.is_none() {
+                    self.$field = Some($value);
+                }
+            };
         }
-        if self.looping.is_none() {
-            self.looping = Some(AliasLooping::Nonlooping);
+        macro_rules! default_str {
+            ($field:ident, $value:expr) => {
+                if self.$field.is_empty() {
+                    self.$field = $value.to_string();
+                }
+            };
         }
-        if self.bus.is_none() {
-            self.bus = Some(AliasBus::BusFx);
-        }
-        if self.compression.is_none() {
-            self.compression = Some(100);
-        }
+
+        // Hard-coded column defaults applied after template inheritance.
+        // Any field still empty/None at this point gets the canonical
+        // fallback value below.
+        default_opt!(behavior, AliasBehavior::Default);
+        default_opt!(storage, AliasStorage::Loaded);
+        default_opt!(bus, AliasBus::BusFx);
+        default_opt!(reverb_send, 0);
+        default_opt!(center_send, 0);
+        default_opt!(vol_min, 92);
+        default_opt!(vol_max, 92);
+        default_opt!(dist_min, 0);
+        default_opt!(dist_max_dry, 10000);
+        default_str!(dry_min_curve, "allon");
+        default_str!(dry_max_curve, "default");
+        default_str!(wet_min_curve, "allon");
+        default_str!(wet_max_curve, "default");
+        default_opt!(limit_count, 8);
+        default_opt!(limit_type, AliasLimitType::Priority);
+        default_opt!(entity_limit_count, 8);
+        default_opt!(entity_limit_type, AliasLimitType::Oldest);
+        default_opt!(pitch_min, 0);
+        default_opt!(pitch_max, 0);
+        default_opt!(priority_min, 100);
+        default_opt!(priority_max, 100);
+        default_opt!(priority_threshold_min, 0.25);
+        default_opt!(priority_threshold_max, 0.75);
+        default_opt!(amplitude_priority, false);
+        default_str!(pan_type, "2d");
+        default_str!(pan, "default");
+        default_opt!(futz, false);
+        default_opt!(looping, AliasLooping::Nonlooping);
+        default_opt!(probability, 1.0);
+        default_opt!(start_delay, 0);
+        default_opt!(envelop_min, 0);
+        default_opt!(envelop_max, 0);
+        default_opt!(envelop_percent, 0);
+        default_opt!(occlusion_level, 0.25);
+        default_opt!(is_big, false);
+        default_opt!(distance_lpf, true);
+        default_opt!(flux_type, AliasFluxType::None);
+        default_opt!(flux_time, 0);
+        default_opt!(doppler, false);
+        default_opt!(timescale, false);
+        default_opt!(is_music, false);
+        default_opt!(is_cinematic, false);
+        default_opt!(fade_in, 0);
+        default_opt!(fade_out, 0);
+        default_opt!(pauseable, true);
+        default_opt!(stop_on_ent_death, false);
+        default_opt!(compression, 100);
+        default_opt!(doppler_scale, 1.0);
+        default_opt!(voice_limit, false);
+        default_opt!(ignore_max_dist, false);
+        default_opt!(never_play_twice, false);
+        default_opt!(continuous_pan, true);
+        default_opt!(wii_u_mono, false);
+        default_opt!(distance_lpf_min, 800);
+        default_opt!(distance_lpf_max, 3000);
+        default_opt!(restart_context_loops, false);
+        default_opt!(silent_in_cpz, false);
+        default_opt!(context_failsafe, false);
+        default_opt!(gpad, false);
+        default_opt!(gpad_only, false);
+        default_opt!(mute_voice, false);
+        default_opt!(mute_music, false);
 
         // Post-merge fixups.
         if self.dist_max_wet.is_none() {

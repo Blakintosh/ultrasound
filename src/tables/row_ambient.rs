@@ -1,15 +1,37 @@
 use crate::tables::bool_from_string;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+/// Empty-cell handler: blank input parses as the string `"default"`,
+/// non-empty passes through. The serde `default = "..."` attribute only
+/// fires on *missing* fields, never on empty cells, so this custom
+/// deserializer is needed to substitute the canonical default value.
+fn empty_as_default_str<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(if s.trim().is_empty() {
+        "default".to_string()
+    } else {
+        s
+    })
+}
 
 #[derive(Debug, Deserialize)]
 pub struct RowAmbient {
     #[serde(rename = "Name")]
     pub name: String,
-    #[serde(rename = "Loadspec", default)]
-    pub loadspec: String,
+    // `Loadspec` exists in some source ambient CSVs but the baseline
+    // schema doesn't define it on RowAmbient — it's ignored on load and
+    // never emitted. We drop it on the floor by leaving no struct field;
+    // serde's relaxed deserializer skips unknown headers cleanly.
     #[serde(rename = "DefaultRoom", default, deserialize_with = "bool_from_string")]
     pub default_room: bool,
-    #[serde(rename = "Reverb", default = "default_reverb")]
+    #[serde(
+        rename = "Reverb",
+        default = "default_reverb",
+        deserialize_with = "empty_as_default_str"
+    )]
     pub reverb: String,
     #[serde(rename = "ReverbDryLevel", default = "default_one")]
     pub reverb_dry_level: f32,
@@ -17,7 +39,11 @@ pub struct RowAmbient {
     pub reverb_wet_level: f32,
     #[serde(rename = "Loop")]
     pub loop_: String,
-    #[serde(rename = "Duck", default = "default_default")]
+    #[serde(
+        rename = "Duck",
+        default = "default_default",
+        deserialize_with = "empty_as_default_str"
+    )]
     pub duck: String,
     #[serde(rename = "EntityContextType0", default)]
     pub entity_context_type_0: String,

@@ -1,5 +1,6 @@
 use clap::Parser;
 
+mod ambient_bsp;
 mod asset_types;
 mod bank;
 mod converted_asset_cache;
@@ -18,6 +19,7 @@ mod sound_zone;
 mod sound_zone_config;
 mod source_asset_cache;
 mod string_hash;
+mod sz_writer;
 mod tables;
 mod units;
 mod update_bank;
@@ -145,6 +147,16 @@ fn single_zone(
         zone.loaded_files.len(),
         zone.streamed_files.len(),
     );
+
+    // Per-zone .sz sidecars (alias / reverb / ambient / ducklist / musiclist).
+    // These are the inputs the engine and downstream zone-build steps read,
+    // so they must land before the banks are deployed. Bank-derived sidecars
+    // (memory / assetcount / assets) are emitted by `update_bank` itself.
+    let locale = snapshot
+        .get_locale(language)
+        .cloned()
+        .ok_or_else(|| format!("unknown language '{}'", language))?;
+    zone.write_outputs(&snapshot.env, &config, &locale)?;
 
     // Build both banks concurrently — they share the same rayon pool for
     // FLAC encoding, so the win is mostly from eliminating the gap between

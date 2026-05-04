@@ -51,6 +51,20 @@ impl Env {
             .join(language_cache_name)
     }
 
+    /// Per-zone .sz output directory. Shared (`all`) outputs go directly under
+    /// `<platform_working>/sound/zone/`; per-locale outputs nest a language
+    /// segment in: `<platform_working>/<language>/sound/zone/`.
+    pub fn get_zone_output_dir(&self, language_name: &str) -> PathBuf {
+        if language_name == "all" {
+            self.platform_working_dir.join("sound").join("zone")
+        } else {
+            self.platform_working_dir
+                .join(language_name)
+                .join("sound")
+                .join("zone")
+        }
+    }
+
     /// Gets the Mod Tools directory
     pub fn get_tools_dir(&self) -> &Path {
         &self.tools_dir
