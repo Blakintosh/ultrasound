@@ -12,6 +12,7 @@ use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
 use crate::source_asset_cache::Checksum;
 use crate::string_hash;
+use crate::sz_writer;
 
 /// Soft cap on a loaded bank (`.sabl`). Exact engine limit is unknown;
 /// 600 MB is a conservative guess used only to surface a warning.
@@ -157,48 +158,72 @@ pub fn update_bank(
         }
     }
 
-    if to_add.is_empty() && to_remove.is_empty() {
-        println!("  {}.{}: up to date", base_name, ext);
-        // Still deploy in case the ship copy is missing.
-        deploy(&cache_path, &ship_path)?;
-        // Bank size warnings are disabled until the real limits are known.
-        // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
-        return Ok(());
+    let cache_missing = !cache_path.exists();
+    let no_changes = to_add.is_empty() && to_remove.is_empty();
+    if no_changes {
+        if cache_missing {
+            println!("  {}.{}: create empty", base_name, ext);
+            bank.write_current(platform.converted_asset_version, false)?;
+        } else {
+            println!("  {}.{}: up to date", base_name, ext);
+        }
+    } else {
+        println!(
+            "  {}.{}: +{} / -{}",
+            base_name,
+            ext,
+            to_add.len(),
+            to_remove.len()
+        );
+
+        // 3. One-shot parallel convert: each worker does fs::read → RIFF parse →
+        //    PCM decode → envelope → resample → FLAC encode in a single pass over
+        //    one buffer. No shared source cache; workers are fully independent.
+        let converted: HashMap<String, (SoundAssetBankConvertedAsset, Vec<u8>)> = to_add
+            .par_iter()
+            .map(|name| {
+                let src = source_map
+                    .get(name)
+                    .ok_or_else(|| format!("obtainer: no source asset for '{}'", name))?;
+                let out = convert_source_inline(src)?;
+                Ok((name.clone(), out))
+            })
+            .collect::<Result<HashMap<_, _>, String>>()?;
+
+        let mut obtainer = PreConvertedObtainer { converted };
+
+        bank.modify(
+            &mut obtainer,
+            &to_remove,
+            &to_add,
+            platform.converted_asset_version,
+            false,
+        )?;
     }
-    println!(
-        "  {}.{}: +{} / -{}",
-        base_name,
-        ext,
-        to_add.len(),
-        to_remove.len()
-    );
 
-    // 3. One-shot parallel convert: each worker does fs::read → RIFF parse →
-    //    PCM decode → envelope → resample → FLAC encode in a single pass over
-    //    one buffer. No shared source cache; workers are fully independent.
-    let converted: HashMap<String, (SoundAssetBankConvertedAsset, Vec<u8>)> = to_add
-        .par_iter()
-        .map(|name| {
-            let src = source_map
-                .get(name)
-                .ok_or_else(|| format!("obtainer: no source asset for '{}'", name))?;
-            let out = convert_source_inline(src)?;
-            Ok((name.clone(), out))
-        })
-        .collect::<Result<HashMap<_, _>, String>>()?;
-
-    let mut obtainer = PreConvertedObtainer { converted };
-
-    bank.modify(
-        &mut obtainer,
-        &to_remove,
-        &to_add,
-        platform.converted_asset_version,
-        false,
-    )?;
-
-    // 4. Deploy cache → ship.
+    // 4. Deploy cache → ship (covers a missing ship copy on otherwise warm
+    //    runs as well as the post-modify path).
     deploy(&cache_path, &ship_path)?;
+
+    // 5. Loaded-bank sidecars. Only the loaded variant emits these; the
+    //    streamed bank doesn't have an asset/memory manifest in baseline.
+    //    Always re-emit to keep the files consistent with the bank on disk
+    //    even when nothing changed (e.g. the manifest was deleted by hand).
+    if !streamed {
+        let dir = snapshot.env.get_zone_output_dir(&language.name);
+        let path_for =
+            |kind: &str| dir.join(format!("{}.{}.{}.sz", zone.name, language.name, kind));
+
+        let total_bytes: u64 = bank.get_files().iter().map(|f| f.entry.size as u64).sum();
+        let count = bank.get_files().len();
+
+        sz_writer::write_plain_text(&path_for("memory"), &total_bytes.to_string())?;
+        sz_writer::write_plain_text(&path_for("assetcount"), &count.to_string())?;
+
+        let names: Vec<&str> = bank.get_files().iter().map(|f| f.name.as_str()).collect();
+        sz_writer::write_assets_list(&path_for("assets"), &names)?;
+    }
+
     // Bank size warnings are disabled until the real limits are known.
     // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
     Ok(())

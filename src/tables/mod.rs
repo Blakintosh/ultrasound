@@ -4,6 +4,7 @@ pub mod row_ambient;
 pub mod row_locale;
 pub mod row_platform;
 pub mod row_reverb;
+pub mod row_script_id_lookup;
 
 use std::fmt::Display;
 use std::path::Path;

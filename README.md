@@ -12,6 +12,9 @@ For the changelogs (including latest version), see [CHANGELOG.md](https://github
 * Support for direct FLAC format.
 * Support for OGG format.
 * Optional support for lossy compression levels that reduce `.sabl` / `.sabs` bank sizes.
+    * Specify `DefaultAliasCompression`: `none, low, medium, high, extreme` in your map/mod's SZC file (or within an ALIAS entry of the SZC) to use alias compression for the project/alias file. 
+    * You can also use `CompressionLevel` column within an alias file to do this for an individual alias.
+    * In testing as a % to baseline, the compression levels approximately mapped to: Low - 74%, Medium - 52%, High - 36%, Extreme - 24%. Your mileage may vary.
 
 ## Installation
 

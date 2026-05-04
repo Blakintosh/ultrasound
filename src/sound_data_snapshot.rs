@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::converted_asset_cache::ConvertedAssetCache;
 use crate::env::Env;
@@ -6,6 +7,7 @@ use crate::source_asset_cache::SourceAssetCache;
 use crate::tables::row_alias::RowAlias;
 use crate::tables::row_locale::RowLocale;
 use crate::tables::row_platform::RowPlatform;
+use crate::tables::row_reverb::{RowReverb, load_reverb_table_with_metadata};
 use crate::tables::{load_table, load_table_relaxed};
 
 /// Per-run global state. Holds everything loaded once at startup and borrowed
@@ -16,6 +18,7 @@ pub struct SoundDataSnapshot {
     pub platforms: Vec<RowPlatform>,
     pub locales: Vec<RowLocale>,
     pub alias_templates: HashMap<String, RowAlias>,
+    pub reverb_lookup: HashMap<String, RowReverb>,
     pub source_asset_cache: SourceAssetCache,
     pub converted_asset_cache: ConvertedAssetCache,
 }
@@ -27,12 +30,14 @@ impl SoundDataSnapshot {
         let locales = load_table::<RowLocale>(&env.get_sound_globals_dir().join("locale.csv"))?;
 
         let alias_templates = load_alias_templates(&env)?;
+        let reverb_lookup = load_reverb_lookup(&env)?;
 
         Ok(Self {
             env,
             platforms,
             locales,
             alias_templates,
+            reverb_lookup,
             source_asset_cache: SourceAssetCache::new(),
             converted_asset_cache: ConvertedAssetCache::new(),
         })
@@ -45,6 +50,59 @@ impl SoundDataSnapshot {
     pub fn get_locale(&self, name: &str) -> Option<&RowLocale> {
         self.locales.iter().find(|l| l.name == name)
     }
+}
+
+fn load_reverb_lookup(env: &Env) -> Result<HashMap<String, RowReverb>, String> {
+    let mut files = Vec::new();
+    collect_csv_files(&env.get_sound_reverb_dir(), &mut files)?;
+    files.sort();
+
+    let mut lookup: HashMap<String, RowReverb> = HashMap::new();
+    for path in files {
+        for row in load_reverb_table_with_metadata(&path)? {
+            let key = row.name.to_ascii_lowercase();
+            if let Some(previous) = lookup.get(&key) {
+                return Err(format!(
+                    "duplicate reverb '{}': {} and {}",
+                    row.name, previous.row_source_file_name, row.row_source_file_name
+                ));
+            }
+            lookup.insert(key, row);
+        }
+    }
+
+    Ok(lookup)
+}
+
+fn collect_csv_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(format!(
+                "Failed to read reverb dir {}: {}",
+                dir.display(),
+                e
+            ));
+        }
+    };
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read reverb dir entry: {}", e))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_csv_files(&path, out)?;
+        } else if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.eq_ignore_ascii_case("csv"))
+            .unwrap_or(false)
+        {
+            out.push(path);
+        }
+    }
+
+    Ok(())
 }
 
 /// Load every CSV under the templates dir and merge into one name → RowAlias map.

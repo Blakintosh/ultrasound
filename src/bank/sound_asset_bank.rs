@@ -1,13 +1,10 @@
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use crate::{
-    bank::{
-        bank_entry::{self, BankEntry},
-        bank_header::BankHeader,
-    },
+    bank::{bank_entry::BankEntry, bank_header::BankHeader},
     converter::{AliasLooping, AssetFormat, SoundAssetBankConvertedAsset},
     obtainer::SoundAssetObtainer,
     source_asset_cache::Checksum,
@@ -425,6 +422,44 @@ impl SoundAssetBank {
         Ok(())
     }
 
+    /// Write a sane bank file even when there are no asset changes to drive
+    /// [`modify`]. This matters for empty localized banks: the linker still
+    /// expects the `.sabl`/`.sabs` files to exist, even if they contain zero
+    /// entries.
+    pub fn write_current(
+        &mut self,
+        converted_asset_version: i32,
+        strip_names: bool,
+    ) -> Result<(), String> {
+        {
+            let mut file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&self.file_name)
+                .map_err(|e| format!("Failed to open {}: {}", self.file_name, e))?;
+
+            self.header.converted_asset_version = converted_asset_version;
+            let position = if let Some(last) = self.bank_files.last() {
+                last.entry.offset + last.entry.size as u64
+            } else {
+                std::mem::size_of::<BankHeader>() as u64
+            };
+            self.write_metadata(&mut file, position, strip_names)?;
+            self.write_header(&mut file)?;
+        }
+
+        let file_size = std::fs::metadata(&self.file_name)
+            .map_err(|e| format!("Failed to stat: {}", e))?
+            .len() as i64;
+        SoundAssetBank::load(&self.file_name, converted_asset_version)
+            .is_sane(file_size)
+            .map_err(|e| format!("Bank was insane after write: {}", e))?;
+
+        Ok(())
+    }
+
     fn invalidate_header(&self, file: &mut File) -> Result<(), String> {
         let mut bank_header = BankHeader::new();
         bank_header.invalidate();
@@ -733,12 +768,36 @@ mod tests {
     }
 
     #[test]
+    fn write_current_creates_empty_sane_bank() {
+        let dir = std::env::temp_dir().join("ultrasound_empty_bank_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("empty.en.sabl");
+        let _ = std::fs::remove_file(&path);
+
+        let mut header = BankHeader::new();
+        header.set_zone_name("empty_zone");
+        header.set_platform("pc");
+        header.set_language("en");
+        header.invalidate();
+
+        let mut bank = SoundAssetBank::new_empty(path.to_str().unwrap(), header);
+        bank.write_current(14, false).expect("write empty bank");
+
+        let file_size = std::fs::metadata(&path).unwrap().len() as i64;
+        let loaded = SoundAssetBank::load(path.to_str().unwrap(), 14);
+        loaded
+            .is_sane(file_size)
+            .expect("empty bank should be sane");
+        assert!(loaded.get_files().is_empty());
+    }
+
+    #[test]
     fn round_trip_copy_assets() {
         use crate::obtainer::SoundAssetBankObtainer;
 
         let src_path = "test_data/core_patch.all.sabl";
         let dst_path = "test_data/round_trip_out.sabl";
-        let _ = fs::remove_file(dst_path);
+        let _ = std::fs::remove_file(dst_path);
 
         // Load the real source bank.
         let src = SoundAssetBank::load(src_path, 0);
@@ -796,7 +855,7 @@ mod tests {
         }
 
         println!("Round-tripped {} assets successfully", expected_count);
-        let _ = fs::remove_file(dst_path);
+        let _ = std::fs::remove_file(dst_path);
     }
 }
 

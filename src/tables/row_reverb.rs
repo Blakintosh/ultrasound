@@ -1,6 +1,9 @@
+use std::path::Path;
+
+use crate::tables::{empty_as_none, load_table_relaxed};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RowReverb {
     #[serde(rename = "Name")]
     pub name: String,
@@ -50,12 +53,49 @@ pub struct RowReverb {
     pub far_smear: f32,
     #[serde(rename = "FarPreDelayMs")]
     pub far_pre_delay_ms: i32,
+    #[serde(rename = "RowSourceFileName", default)]
+    pub row_source_file_name: String,
+    #[serde(rename = "RowSourceShortName", default)]
+    pub row_source_short_name: String,
+    #[serde(
+        rename = "RowSourceLineNumber",
+        default,
+        deserialize_with = "empty_as_none"
+    )]
+    pub row_source_line_number: Option<i32>,
 }
 
 impl crate::tables::Row for RowReverb {
     fn get_row_name(&self) -> &str {
         &self.name
     }
+}
+
+pub fn load_reverb_table_with_metadata(path: &Path) -> Result<Vec<RowReverb>, String> {
+    let mut rows: Vec<RowReverb> = load_table_relaxed(path)?;
+    let source_file = std::fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .into_owned();
+    let source_short_name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+
+    for (index, row) in rows.iter_mut().enumerate() {
+        if row.row_source_file_name.is_empty() {
+            row.row_source_file_name = source_file.clone();
+        }
+        if row.row_source_short_name.is_empty() {
+            row.row_source_short_name = source_short_name.clone();
+        }
+        if row.row_source_line_number.is_none() {
+            row.row_source_line_number = Some((index + 2) as i32);
+        }
+    }
+
+    Ok(rows)
 }
 
 #[cfg(test)]

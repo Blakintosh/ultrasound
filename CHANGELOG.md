@@ -1,4 +1,8 @@
-### Version 0.2 (latest)
+### Version 0.3 (latest)
+
+* Added emitting .sz files used by Linker, as well as ambientgeometry.json files.
+
+### Version 0.2
 
 * Added FLAC file input support.
 * Added OGG file input support.
