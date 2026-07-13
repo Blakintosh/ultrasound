@@ -499,6 +499,19 @@ macro_rules! merge_str {
 }
 
 impl RowAlias {
+    /// Clear the paths generated during filespec resolution. These columns
+    /// must not be inherited from source CSVs or a previous converter run:
+    /// they are rebuilt from the current `FileSpec*` fields for the emitted
+    /// alias table.
+    pub fn clear_resolved_file_fields(&mut self) {
+        self.file_source.clear();
+        self.file_source_sustain.clear();
+        self.file_source_release.clear();
+        self.file_target.clear();
+        self.file_target_sustain.clear();
+        self.file_target_release.clear();
+    }
+
     /// Merge missing fields from the alias's named template, if any. Also
     /// applies hard-coded post-merge fixups (DistMaxWet ← DistMaxDry,
     /// WetMinCurve ← DryMinCurve, Pan=lfe → ReverbSend=0).
@@ -905,5 +918,22 @@ mod tests {
                 r.name, r.file_spec, r.bus, r.storage
             );
         }
+    }
+
+    #[test]
+    fn generated_file_fields_do_not_leak_from_source_rows() {
+        let input = "Name,FileSource,FileSourceSustain,FileSourceRelease,FileTarget,FileTargetSustain,FileTargetRelease\n\
+            footstep,old.wav,old_sustain.wav,old_release.wav,old.snd,stale_sustain_alias,old_release.snd\n";
+        let mut reader = csv::Reader::from_reader(input.as_bytes());
+        let mut alias: RowAlias = reader.deserialize().next().unwrap().unwrap();
+
+        alias.clear_resolved_file_fields();
+
+        assert!(alias.file_source.is_empty());
+        assert!(alias.file_source_sustain.is_empty());
+        assert!(alias.file_source_release.is_empty());
+        assert!(alias.file_target.is_empty());
+        assert!(alias.file_target_sustain.is_empty());
+        assert!(alias.file_target_release.is_empty());
     }
 }
