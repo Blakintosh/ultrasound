@@ -61,12 +61,19 @@ pub fn load_table_relaxed<T: for<'de> serde::Deserialize<'de>>(
         let mut record =
             result.map_err(|e| format!("Failed to read row in file {}: {}", path.display(), e))?;
 
-        // Skip comment rows. The csv crate's built-in comment option only
-        // catches records where `#` is literally the first byte, so it misses
-        // quoted cells (`"#section"`) and lines that start with whitespace.
-        // Check the first field after parsing + trimming to catch both cases.
-        if record.get(0).map(|f| f.starts_with('#')).unwrap_or(false) {
-            continue;
+        // Skip blank and comment rows. A row is dropped whenever its first
+        // (key) cell — `Name` / `ScriptId` — is empty or begins with a
+        // comment marker. This covers blank lines, comma-only spacer rows,
+        // rows whose Name was left empty, and commented-out rows, so none of
+        // them deserialize into an all-default row with an empty Name (which
+        // a downstream consumer would then reject as a malformed alias). The
+        // csv crate's built-in comment option only catches `#` as the literal
+        // first byte, so the explicit check below also handles quoted cells
+        // (`"#section"`) and lines that start with whitespace, post-trim.
+        match record.get(0).map(str::trim) {
+            None | Some("") => continue,
+            Some(f) if f.starts_with('#') || f.starts_with('"') => continue,
+            _ => {}
         }
 
         while record.len() < header_len {
@@ -161,4 +168,45 @@ where
     T::deserialize(upper.as_str().into_deserializer())
         .map(Some)
         .map_err(|e: serde::de::value::Error| serde::de::Error::custom(e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    struct TestRow {
+        #[serde(rename = "Name", default)]
+        name: String,
+        #[serde(rename = "Value", default)]
+        #[allow(dead_code)]
+        value: String,
+    }
+
+    /// A blank line, a comma-only spacer, a row with an empty Name, and the
+    /// three comment shapes (`#` at start, whitespace-led `#`, comma-led `#`)
+    /// must all be dropped — only the two genuinely-named rows survive. This
+    /// is the guard against an empty source row becoming a phantom all-default
+    /// alias once column defaults are applied.
+    #[test]
+    fn relaxed_loader_drops_blank_and_comment_rows() {
+        let dir = std::env::temp_dir().join("ultrasound_relaxed_skip_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rows.csv");
+        let csv = "Name,Value\n\
+                   alpha,1\n\
+                   \n\
+                   ,,\n\
+                   ,has_value_but_no_name\n\
+                   # a comment\n\
+                   \t# indented comment\n\
+                   ,# comma-led comment\n\
+                   beta,2\n";
+        std::fs::write(&path, csv).unwrap();
+
+        let rows: Vec<TestRow> = load_table_relaxed(&path).unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["alpha", "beta"]);
+    }
 }

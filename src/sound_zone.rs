@@ -181,6 +181,13 @@ impl SoundZone {
             .par_iter_mut()
             .try_for_each(|alias| -> Result<(), String> {
                 alias.expand_template(templates)?;
+                // FileSource/FileTarget columns are generated output, not
+                // source-alias input. A source CSV can contain stale values
+                // left by an earlier conversion; retaining them makes the
+                // emitted .alias.sz reference nonexistent sustain/release
+                // assets. Rebuild the fields exclusively from this run's
+                // resolved FileSpecs below.
+                alias.clear_resolved_file_fields();
                 alias.validate_after_template()?;
                 Ok(())
             })?;
