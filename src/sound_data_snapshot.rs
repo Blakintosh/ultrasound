@@ -141,6 +141,7 @@ mod tests {
     /// Standalone test: loads the template CSV we have in test_data directly,
     /// bypassing Env, to prove the parser handles the templates file shape.
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_template_csv_directly() {
         let path = PathBuf::from("test_data/template_rottsky.csv");
         let rows: Vec<RowAlias> = load_table_relaxed(&path).expect("load templates");

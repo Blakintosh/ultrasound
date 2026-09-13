@@ -735,6 +735,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_bank_file() {
         let path = "test_data/core_patch.all.sabl";
         let file_size = std::fs::metadata(path).expect("test file missing").len() as i64;
@@ -792,6 +793,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn round_trip_copy_assets() {
         use crate::obtainer::SoundAssetBankObtainer;
 

@@ -45,6 +45,7 @@ mod tests {
     );
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn decode_real_file_produces_samples() {
         let data = std::fs::read(SAMPLE_OGG).expect("sample ogg present in repo root");
         let audio = decode(SAMPLE_OGG, &data).expect("decode succeeds");

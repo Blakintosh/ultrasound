@@ -859,6 +859,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn expand_and_validate_real_aliases() {
         use std::collections::HashMap;
         let templates: Vec<RowAlias> =
@@ -907,6 +908,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_alias_csv() {
         let rows: Vec<RowAlias> =
             load_table_relaxed(Path::new("test_data/zm_karelia_sfx.csv")).expect("load");

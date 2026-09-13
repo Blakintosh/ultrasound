@@ -22,6 +22,9 @@ Navigate to the [Releases](https://github.com/Blakintosh/ultrasound/releases) ta
 
 ## Issues
 
+For the v1 regression audit, fixture setup, and change-review procedure, see
+[Testing changes toward v1](docs/testing.md).
+
 The current version of Ultrasound is an early release and may not yet achieve complete feature parity with the original snd_convert. If you encounter any issues where sound files do not parse with Ultrasound (but do parse with snd_convert), please file an issue report.
 
 ## Performance

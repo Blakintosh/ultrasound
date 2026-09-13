@@ -105,6 +105,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_reverb_csv() {
         let rows: Vec<RowReverb> =
             load_table(Path::new("test_data/common_reverb.csv")).expect("load");

@@ -1,0 +1,27 @@
+name: Compatibility audit
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit, pipeline and known-bug checks
+        run: python scripts/audit.py --known-bugs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compatibility-audit
+          path: target/audit/report.json

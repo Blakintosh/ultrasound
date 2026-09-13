@@ -1,0 +1,16 @@
+{
+  "name": "replace-with-working-map",
+  "invocation": ["pc", "pc", "unused", "sound_zone", "replace-with-project", "replace-with-zone", "all", "en"],
+  "inputs": [
+    "replace-with-project/sound/zoneconfig/replace-with-zone.szc",
+    "share/raw/sound/globals/platform.csv",
+    "share/raw/sound/globals/locale.csv",
+    "share/raw/sound/aliases/replace-with-alias-table.csv",
+    "sound_assets/replace-with-source-folder/*.wav"
+  ],
+  "outputs": [
+    "pc/zone/snd/all/replace-with-zone.all.sabl",
+    "pc/zone/snd/all/replace-with-zone.all.sabs",
+    "pc/sound/zone/replace-with-zone.all.*.sz"
+  ]
+}

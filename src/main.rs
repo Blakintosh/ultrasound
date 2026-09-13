@@ -24,6 +24,9 @@ mod tables;
 mod units;
 mod update_bank;
 
+#[cfg(test)]
+mod regression_tests;
+
 use env::Env;
 use sound_data_snapshot::SoundDataSnapshot;
 use sound_zone::SoundZone;

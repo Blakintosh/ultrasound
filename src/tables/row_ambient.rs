@@ -86,6 +86,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_ambient_csv() {
         let rows: Vec<RowAmbient> =
             load_table(Path::new("test_data/ambient_zm_karelia.csv")).expect("load");

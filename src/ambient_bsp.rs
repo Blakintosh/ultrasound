@@ -704,6 +704,7 @@ mod tests {
         /// without divergence, our schema (PascalCase keys, array shape,
         /// scalar types) matches the expected output exactly.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn schema_round_trips_through_our_types() {
             let raw = fs::read_to_string(REF_PATH).expect("read reference json");
             let baseline: Value = serde_json::from_str(&raw).expect("parse baseline");
@@ -722,6 +723,7 @@ mod tests {
         /// consumers actually read. Verifies room/priority/id are intact
         /// after a round-trip through our types.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn trigger_round_trip_preserves_room_priority() {
             let raw = fs::read_to_string(REF_PATH).expect("read reference json");
             let typed: AmbientBsp = serde_json::from_str(&raw).expect("decode into AmbientBsp");

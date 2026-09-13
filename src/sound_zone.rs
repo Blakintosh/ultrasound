@@ -729,6 +729,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn ambient_reverbs_preserve_baseline_duplicates() {
         use crate::tables::load_table_relaxed;
         use crate::tables::row_reverb::load_reverb_table_with_metadata;
@@ -857,6 +858,7 @@ weap_template,,,,,,,,,,,
     /// rather than hard-coding them — if the baseline ever changes, the
     /// expected counts update with it.
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn baseline_alias_row_counts_match_for_affected_aliases() {
         const REF_PATH: &str = "test_data/baseline_outputs/zm_karelia/zm_karelia.all.alias.sz";
         const TARGETS: &[&str] = &[

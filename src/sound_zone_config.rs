@@ -89,6 +89,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_szc() {
         let path = Path::new("test_data/zm_karelia.szc");
         let config = SoundZoneConfig::load(path).expect("load");

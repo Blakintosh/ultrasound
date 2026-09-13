@@ -1,4 +1,5 @@
 /target
+__pycache__/
 .claude
 /test_data
 CLAUDE.md

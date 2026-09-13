@@ -442,6 +442,7 @@ mod tests {
     );
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn parse_streaminfo_reads_real_file() {
         let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present in repo root");
         let info = parse_streaminfo(SAMPLE_FLAC, &data).expect("streaminfo parses");
@@ -452,6 +453,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn decode_real_file_produces_samples() {
         let data = std::fs::read(SAMPLE_FLAC).expect("sample flac present in repo root");
         let audio = decode(SAMPLE_FLAC, &data).expect("decode succeeds");
@@ -470,6 +472,7 @@ mod tests {
     /// human can eyeball the ratio. Run with:
     ///   cargo test --release lossy_prepass_shrinks_flac -- --nocapture
     #[test]
+    #[ignore = "exploratory benchmark; requires external fixtures"]
     fn lossy_prepass_shrinks_flac() {
         use lewton::inside_ogg::OggStreamReader;
         use std::io::Cursor;

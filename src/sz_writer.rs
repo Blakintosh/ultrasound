@@ -717,6 +717,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// `MusicFiles` ([`zm_karelia`]) under a `Name` header. Should be
         /// byte-identical to what `write_name_list` produces.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn musiclist() {
             let mut names = BTreeSet::new();
             names.insert("zm_karelia".to_string());
@@ -733,6 +734,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// reference makes this test independent of the upstream alias /
         /// ambient resolution that originally produced the list.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn ducklist() {
             let names = [
                 "blak_abyss",
@@ -759,6 +761,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// `zm_karelia.all.scriptid.sz` baseline is header-only: this zone
         /// has no scriptid sibling CSVs.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn scriptid_empty() {
             let rows: Vec<RowScriptIdLookup> = Vec::new();
             let out = tmp("zm_karelia.all.scriptid.sz");
@@ -773,6 +776,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// terminator. Bank data isn't fixtured, so we pin against the
         /// reference byte-for-byte by feeding the known total directly.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn memory_format() {
             let out = tmp("zm_karelia.all.memory.sz");
             write_plain_text(&out, "522075371").unwrap();
@@ -785,6 +789,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// Same shape as `memory.sz` — proves the formatting (no
         /// terminator, raw `to_string()`) matches baseline.
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn assetcount_format() {
             let out = tmp("zm_karelia.all.assetcount.sz");
             write_plain_text(&out, "8813").unwrap();
@@ -805,6 +810,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// * String passthrough across all the context cells
         /// * Empty-cell rendering for absent context types/values
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn ambient_columns_and_string_formatting() {
             use crate::tables::load_table_relaxed;
             use crate::tables::row_ambient::RowAmbient;
@@ -879,6 +885,7 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
         /// to baseline (catches f32 → string drift like `0` vs `0.0`,
         /// `5.1` vs `5.099999`, `-13` vs `-13.0`).
         #[test]
+        #[ignore = "external fixtures: see docs/testing.md"]
         fn reverb_columns_and_numeric_formatting() {
             use crate::tables::load_table;
             use crate::tables::row_reverb::RowReverb;

@@ -72,6 +72,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_duk() {
         let duck = Duck::load(Path::new("test_data/blak_health_low.duk")).expect("load");
         assert!(!duck.name.is_empty());

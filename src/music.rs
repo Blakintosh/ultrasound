@@ -112,6 +112,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "external fixtures: see docs/testing.md"]
     fn load_real_mus() {
         let set = MusicSet::load(Path::new("test_data/zm_karelia.mus")).expect("load");
         assert!(!set.name.is_empty());

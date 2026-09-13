@@ -1,0 +1,119 @@
+{
+  "inputs": {
+    "project/sound/zoneconfig/audit.szc": "806efcf5ec2c3ef5a535bb9bf4c10a4d2bb0575aa4b6628b56d2fbfa765a1126",
+    "share/raw/sound/aliases/audit.csv": "2dd75e6d6cb32c17c7c5ff06a9b1e9ad32373785e92990c2a815905fcf8cb0a2",
+    "share/raw/sound/globals/locale.csv": "630cc4eb814153f22f9a3661cd434db0217a52ea29c0ed8c6ddde70e4e002095",
+    "share/raw/sound/globals/platform.csv": "f4c41f12848f4e2f04b4cce0560234bc5cce802beba23a179009e7875b23e184",
+    "share/raw/sound/templates/base.csv": "029677b8d894c89e92bdaedd7037bdf4521eecb5479061602ba046164225a961",
+    "sound_assets/attack.wav": "705b34cce24db5f7b192c6810f28701ec57552eb44e4eaeb37a62abf98216988",
+    "sound_assets/music.wav": "178e04ff133bd59e0c88eed46335a71695f3a0f4a33b877a8d8ca3fc4c9c8e55",
+    "sound_assets/sustain.wav": "705b34cce24db5f7b192c6810f28701ec57552eb44e4eaeb37a62abf98216988",
+    "sound_assets/tail.wav": "705b34cce24db5f7b192c6810f28701ec57552eb44e4eaeb37a62abf98216988",
+    "sound_assets/tone.wav": "705b34cce24db5f7b192c6810f28701ec57552eb44e4eaeb37a62abf98216988",
+    "sound_assets/voice.wav": "705b34cce24db5f7b192c6810f28701ec57552eb44e4eaeb37a62abf98216988",
+    "soundloc_assets/en/voice.wav": "7fd2e011cf0292079ffde9acc506e1f300b86e519036f25ae9d7f4bc6c5343e1"
+  },
+  "outputs": {
+    "en/sound/zone/audit.en.alias.sz": "Name,Behavior,Storage,FileSpec,FileSpecSustain,FileSpecRelease,Template,Loadspec,Secondary,SustainAlias,ReleaseAlias,Bus,VolumeGroup,DuckGroup,Duck,ReverbSend,CenterSend,VolMin,VolMax,DistMin,DistMaxDry,DistMaxWet,DryMinCurve,DryMaxCurve,WetMinCurve,WetMaxCurve,LimitCount,LimitType,EntityLimitCount,EntityLimitType,PitchMin,PitchMax,PriorityMin,PriorityMax,PriorityThresholdMin,PriorityThresholdMax,AmplitudePriority,PanType,Pan,Futz,Looping,RandomizeType,Probability,StartDelay,EnvelopMin,EnvelopMax,EnvelopPercent,OcclusionLevel,IsBig,DistanceLpf,FluxType,FluxTime,Subtitle,Doppler,ContextType,ContextValue,ContextType1,ContextValue1,ContextType2,ContextValue2,ContextType3,ContextValue3,Timescale,IsMusic,IsCinematic,FadeIn,FadeOut,Pauseable,StopOnEntDeath,Compression,StopOnPlay,DopplerScale,FutzPatch,VoiceLimit,IgnoreMaxDist,NeverPlayTwice,ContinuousPan,FileSource,FileSourceSustain,FileSourceRelease,FileTarget,FileTargetSustain,FileTargetRelease,Platform,Language,OutputDevices,PlatformMask,WiiUMono,StopAlias,DistanceLpfMin,DistanceLpfMax,FacialAnimationName,RestartContextLoops,SilentInCPZ,ContextFailsafe,GPAD,GPADOnly,MuteVoice,MuteMusic,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\nasr,DEFAULT,LOADED,attack.wav,sustain.wav,tail.wav,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nmusic,DEFAULT,STREAMED,music.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\ntone,DEFAULT,LOADED,tone.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nvoice,DEFAULT,LOADED,voice.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,<GAME>\\soundloc_assets\\en/voice.wav,,,voice.LN100.pc.snd,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\n",
+    "en/sound/zone/audit.en.assetcount.sz": "1",
+    "en/sound/zone/audit.en.assets.sz": "voice.LN100.pc.snd",
+    "en/sound/zone/audit.en.memory.sz": "4007",
+    "fr/sound/zone/audit.fr.alias.sz": "Name,Behavior,Storage,FileSpec,FileSpecSustain,FileSpecRelease,Template,Loadspec,Secondary,SustainAlias,ReleaseAlias,Bus,VolumeGroup,DuckGroup,Duck,ReverbSend,CenterSend,VolMin,VolMax,DistMin,DistMaxDry,DistMaxWet,DryMinCurve,DryMaxCurve,WetMinCurve,WetMaxCurve,LimitCount,LimitType,EntityLimitCount,EntityLimitType,PitchMin,PitchMax,PriorityMin,PriorityMax,PriorityThresholdMin,PriorityThresholdMax,AmplitudePriority,PanType,Pan,Futz,Looping,RandomizeType,Probability,StartDelay,EnvelopMin,EnvelopMax,EnvelopPercent,OcclusionLevel,IsBig,DistanceLpf,FluxType,FluxTime,Subtitle,Doppler,ContextType,ContextValue,ContextType1,ContextValue1,ContextType2,ContextValue2,ContextType3,ContextValue3,Timescale,IsMusic,IsCinematic,FadeIn,FadeOut,Pauseable,StopOnEntDeath,Compression,StopOnPlay,DopplerScale,FutzPatch,VoiceLimit,IgnoreMaxDist,NeverPlayTwice,ContinuousPan,FileSource,FileSourceSustain,FileSourceRelease,FileTarget,FileTargetSustain,FileTargetRelease,Platform,Language,OutputDevices,PlatformMask,WiiUMono,StopAlias,DistanceLpfMin,DistanceLpfMax,FacialAnimationName,RestartContextLoops,SilentInCPZ,ContextFailsafe,GPAD,GPADOnly,MuteVoice,MuteMusic,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\nasr,DEFAULT,LOADED,attack.wav,sustain.wav,tail.wav,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nmusic,DEFAULT,STREAMED,music.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\ntone,DEFAULT,LOADED,tone.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nvoice,DEFAULT,LOADED,voice.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,,,,,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\n",
+    "fr/sound/zone/audit.fr.assetcount.sz": "0",
+    "fr/sound/zone/audit.fr.assets.sz": "",
+    "fr/sound/zone/audit.fr.memory.sz": "0",
+    "sound/zone/audit.all.alias.sz": "Name,Behavior,Storage,FileSpec,FileSpecSustain,FileSpecRelease,Template,Loadspec,Secondary,SustainAlias,ReleaseAlias,Bus,VolumeGroup,DuckGroup,Duck,ReverbSend,CenterSend,VolMin,VolMax,DistMin,DistMaxDry,DistMaxWet,DryMinCurve,DryMaxCurve,WetMinCurve,WetMaxCurve,LimitCount,LimitType,EntityLimitCount,EntityLimitType,PitchMin,PitchMax,PriorityMin,PriorityMax,PriorityThresholdMin,PriorityThresholdMax,AmplitudePriority,PanType,Pan,Futz,Looping,RandomizeType,Probability,StartDelay,EnvelopMin,EnvelopMax,EnvelopPercent,OcclusionLevel,IsBig,DistanceLpf,FluxType,FluxTime,Subtitle,Doppler,ContextType,ContextValue,ContextType1,ContextValue1,ContextType2,ContextValue2,ContextType3,ContextValue3,Timescale,IsMusic,IsCinematic,FadeIn,FadeOut,Pauseable,StopOnEntDeath,Compression,StopOnPlay,DopplerScale,FutzPatch,VoiceLimit,IgnoreMaxDist,NeverPlayTwice,ContinuousPan,FileSource,FileSourceSustain,FileSourceRelease,FileTarget,FileTargetSustain,FileTargetRelease,Platform,Language,OutputDevices,PlatformMask,WiiUMono,StopAlias,DistanceLpfMin,DistanceLpfMax,FacialAnimationName,RestartContextLoops,SilentInCPZ,ContextFailsafe,GPAD,GPADOnly,MuteVoice,MuteMusic,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\nasr,DEFAULT,LOADED,attack.wav,sustain.wav,tail.wav,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,<GAME>\\sound_assets\\attack.wav,<GAME>\\sound_assets\\sustain.wav,<GAME>\\sound_assets\\tail.wav,attack.LN100.pc.snd,sustain.LL100.pc.snd,tail.LN100.pc.snd,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nmusic,DEFAULT,STREAMED,music.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,<GAME>\\sound_assets\\music.wav,,,music.SN100.pc.snd,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\ntone,DEFAULT,LOADED,tone.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,<GAME>\\sound_assets\\tone.wav,,,tone.LN100.pc.snd,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\nvoice,DEFAULT,LOADED,voice.wav,,,base,,,,,BUS_FX,,,,0,0,77,77,0,10000,10000,allon,default,allon,default,8,PRIORITY,8,OLDEST,0,0,100,100,0.25,0.75,False,2d,default,False,NONLOOPING,,1,0,0,0,0,0.25,False,True,NONE,0,,False,,,,,,,,,False,False,False,0,0,True,False,100,,1,,False,False,False,True,<GAME>\\sound_assets\\voice.wav,,,voice.LN100.pc.snd,,,,,,,False,,800,3000,,False,False,False,False,False,False,False,,,\n",
+    "sound/zone/audit.all.ambient.sz": "Name,DefaultRoom,Reverb,ReverbDryLevel,ReverbWetLevel,Loop,Duck,EntityContextType0,EntityContextValue0,EntityContextType1,EntityContextValue1,EntityContextType2,EntityContextValue2,GlobalContextType,GlobalContextValue,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\n",
+    "sound/zone/audit.all.assetcount.sz": "5",
+    "sound/zone/audit.all.assets.sz": "attack.LN100.pc.snd\nsustain.LL100.pc.snd\ntail.LN100.pc.snd\ntone.LN100.pc.snd\nvoice.LN100.pc.snd",
+    "sound/zone/audit.all.ducklist.sz": "Name",
+    "sound/zone/audit.all.memory.sz": "18830",
+    "sound/zone/audit.all.musiclist.sz": "Name",
+    "sound/zone/audit.all.reverb.sz": "Name,MasterReturn,EarlyInputLpf,EarlyFeedback,EarlySmear,EarlyBaseDelayMs,EarlyPreDelayMs,EarlyReturn,NearInputLpf,NearFeedback,NearReturn,NearLowDamp,NearHighDamp,NearDecayTime,NearSmear,NearPreDelayMs,FarInputLpf,FarFeedback,FarReturn,FarLowDamp,FarHighDamp,FarDecayTime,FarSmear,FarPreDelayMs,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\n",
+    "sound/zone/audit.all.scriptid.sz": "ScriptId,AliasName,RowSourceFileName,RowSourceShortName,RowSourceLineNumber\n",
+    "zone/snd/all/audit.all.sabl": {
+      "assets": {
+        "attack.LN100.pc.snd": {
+          "channels": 1,
+          "envelope": "5b5b5b5b00001bc7",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "32d98a765508526bc137ecb3030bf8614501b5d527cf232ebe8f0466ebb9fc1f",
+          "source_checksum": "0bd182369bf983e4e40ff1e7a5cbe9c1"
+        },
+        "sustain.LL100.pc.snd": {
+          "channels": 1,
+          "envelope": "5b5b5b5b00001bc7",
+          "frames": 4800,
+          "looping": 1,
+          "payload_sha256": "32d98a765508526bc137ecb3030bf8614501b5d527cf232ebe8f0466ebb9fc1f",
+          "source_checksum": "0bd182369bf983e4e40ff1e7a5cbe9c1"
+        },
+        "tail.LN100.pc.snd": {
+          "channels": 1,
+          "envelope": "5b5b5b5b00001bc7",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "32d98a765508526bc137ecb3030bf8614501b5d527cf232ebe8f0466ebb9fc1f",
+          "source_checksum": "0bd182369bf983e4e40ff1e7a5cbe9c1"
+        },
+        "tone.LN100.pc.snd": {
+          "channels": 1,
+          "envelope": "5b5b5b5b00001bc7",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "32d98a765508526bc137ecb3030bf8614501b5d527cf232ebe8f0466ebb9fc1f",
+          "source_checksum": "0bd182369bf983e4e40ff1e7a5cbe9c1"
+        },
+        "voice.LN100.pc.snd": {
+          "channels": 1,
+          "envelope": "5b5b5b5b00001bc7",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "32d98a765508526bc137ecb3030bf8614501b5d527cf232ebe8f0466ebb9fc1f",
+          "source_checksum": "0bd182369bf983e4e40ff1e7a5cbe9c1"
+        }
+      },
+      "identity": "617564697400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007063000000000000616c0e000000"
+    },
+    "zone/snd/all/audit.all.sabs": {
+      "assets": {
+        "music.SN100.pc.snd": {
+          "channels": 2,
+          "envelope": "5b5b5b5b0000ff7f",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "cc14a5d75d910f6b83e308d78b8b9a667a8f1cece6509bd40c50d1e21d5c890b",
+          "source_checksum": "1589debffb4986743dd3f269b013826b"
+        }
+      },
+      "identity": "617564697400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007063000000000000616c0e000000"
+    },
+    "zone/snd/en/audit.en.sabl": {
+      "assets": {
+        "voice.LN100.pc.snd": {
+          "channels": 1,
+          "envelope": "5757575700001bc7",
+          "frames": 4800,
+          "looping": 0,
+          "payload_sha256": "718796c61e20043af17afc7772d48d2d8b5d5a6e95ea506150f9a51ed4fa6666",
+          "source_checksum": "2b134aadfc3433ccb4f98b5633441c52"
+        }
+      },
+      "identity": "617564697400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007063000000000000656e0e000000"
+    },
+    "zone/snd/en/audit.en.sabs": {
+      "assets": {},
+      "identity": "617564697400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007063000000000000656e0e000000"
+    },
+    "zone/snd/fr/audit.fr.sabl": {
+      "assets": {},
+      "identity": "61756469740000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000706300000000000066720e000000"
+    },
+    "zone/snd/fr/audit.fr.sabs": {
+      "assets": {},
+      "identity": "61756469740000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000706300000000000066720e000000"
+    }
+  },
+  "reference_commit": "5ebfe3a331391f85b4c354cb61fa2eb32e2c6fc8"
+}
