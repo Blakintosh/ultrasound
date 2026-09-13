@@ -118,6 +118,10 @@ class Project:
                 result[key] = body
         return result
 
+    def output_times(self):
+        return {p.relative_to(self.root / "pc").as_posix(): p.stat().st_mtime_ns
+                for p in (self.root / "pc").rglob("*") if p.is_file() and "CachedBanks" not in p.parts}
+
     def clean_equivalent(self, label):
         incremental = self.snapshot()
         # Only generated bank copies inside this temporary project are removed.
@@ -212,9 +216,11 @@ def pipeline(exe, report, record=False):
             changed_keys = [key for key in sorted(set(expected["outputs"]) | set(baseline))
                             if expected["outputs"].get(key) != baseline.get(key)]
             require(not changed_keys, f"cold outputs differ from reviewed baseline: {changed_keys}")
+        initial_times = project.output_times()
         for repeat in range(5):
             project.run(f"warm {repeat + 1}")
             require(project.snapshot() == baseline, "warm build changed output contents")
+            require(project.output_times() == initial_times, "warm build rewrote unchanged deployed outputs")
         warm = [r["seconds"] for r in report["runs"] if r.get("label", "").startswith("warm ")]
         report["warm_seconds"] = {"median": statistics.median(warm), "min": min(warm), "max": max(warm)}
         for lang in ("all", "en", "fr"):
@@ -227,6 +233,14 @@ def pipeline(exe, report, record=False):
         (project.root / "pc/sound/zone/audit.all.assetcount.sz").unlink()
         project.run("missing sidecar")
         require(project.snapshot() == baseline, "missing sidecar was not restored")
+        damaged_ship = project.bank()
+        with damaged_ship.open("r+b") as stream:
+            stream.seek(-1, 2)
+            last = stream.read(1)[0]
+            stream.seek(-1, 2)
+            stream.write(bytes([last ^ 1]))
+        project.run("same-size deployed corruption")
+        require(project.snapshot() == baseline, "same-size deployment corruption was not repaired")
         audio(project.root / "sound_assets/tone.wav", amplitude=4000)
         project.run("one source edit")
         changed = project.snapshot()
@@ -319,7 +333,7 @@ def pipeline(exe, report, record=False):
 def pipeline_bugs(exe, report):
     with tempfile.TemporaryDirectory(prefix="ultrasound-bugs-") as directory:
         project = Project(Path(directory), exe, report["runs"])
-        project.run("B006 setup")
+        project.run("folder FileSpec setup")
         audio(project.root / "sound_assets/variations/one.wav")
         audio(project.root / "sound_assets/variations/two.wav", amplitude=6000)
         project.rows = [{"Name": "variation", "Template": "base", "FileSpec": "variations"}]
@@ -332,13 +346,42 @@ def pipeline_bugs(exe, report):
         report["known_bugs"]["B007"] = "reproduced: two bank assets, only first referenced"
 
 
+def migration(reference, candidate, alternate, report):
+    with tempfile.TemporaryDirectory(prefix="ultrasound-migration-") as directory:
+        project = Project(Path(directory), reference, report["runs"])
+        project.run("previous converter")
+        previous = project.snapshot()
+        project.exe = candidate
+        project.run("migrate previous cache")
+        migrated = project.snapshot()
+        require(migrated == json.loads(BASELINE.read_text(encoding="utf-8"))["outputs"],
+                "migration did not replace stale audio and metadata")
+        require(previous != migrated, "migration test needs a reference with an older recipe")
+        project.clean_equivalent("previous cache migration")
+        if alternate:
+            project.exe = alternate
+            project.run("alternate encoder recipe")
+            changed = project.snapshot()
+            require(changed != migrated, "alternate build did not invalidate its encoding recipe")
+            project.clean_equivalent("alternate encoder recipe")
+            project.exe = candidate
+            project.run("restore default encoder recipe")
+            require(project.snapshot() == migrated, "returning to default encoding retained alternate cache")
+        report["migration"] = {"status": "passed", "reference_sha256": digest(reference.read_bytes()),
+                               "alternate_sha256": digest(alternate.read_bytes()) if alternate else None}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--external", action="store_true", help="require the private test_data corpus")
     parser.add_argument("--known-bugs", action="store_true", help="verify failures have the documented cause")
     parser.add_argument("--record-baseline", action="store_true", help="explicitly replace the reviewed default-feature snapshot")
+    parser.add_argument("--migration-reference", type=Path, help="older converter executable for warm-cache migration checks")
+    parser.add_argument("--alternate-executable", type=Path, help="alternate encoding recipe executable (requires migration reference)")
     parser.add_argument("--report", type=Path, default=REPO / "target/audit/report.json")
     args = parser.parse_args()
+    if args.alternate_executable and not args.migration_reference:
+        parser.error("--alternate-executable requires --migration-reference")
     report = {"machine": platform.platform(), "runs": [], "known_bugs": {},
               "external": "not requested; external compatibility coverage skipped",
               "real_world_build_and_playback": "not run"}
@@ -384,6 +427,9 @@ def main():
         exe = REPO / "target/release/ultrasound.exe"
         report["executable_sha256"] = digest(exe.read_bytes())
         pipeline(exe, report, args.record_baseline)
+        if args.migration_reference:
+            migration(args.migration_reference.resolve(strict=True), exe,
+                      args.alternate_executable.resolve(strict=True) if args.alternate_executable else None, report)
         if args.known_bugs:
             pipeline_bugs(exe, report)
         report["status"] = "passed"

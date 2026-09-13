@@ -222,6 +222,18 @@ pub fn convert_source_inline(
     let source_checksum =
         Checksum::from_data_with_recipe(&data, &asset.compression_level.recipe_fingerprint());
 
+    convert_source_data(asset, data, source_checksum)
+}
+
+pub fn convert_source_data(
+    asset: &SoundAssetBankSourceAsset,
+    data: Vec<u8>,
+    source_checksum: Checksum,
+) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
+    if asset.platform.platform != "pc" {
+        return Err(format!("Unsupported platform: {}", asset.platform.platform));
+    }
+
     let ext = Path::new(&asset.source_name)
         .extension()
         .and_then(|e| e.to_str())

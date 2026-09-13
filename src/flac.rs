@@ -286,6 +286,17 @@ pub fn encode(
     frame_count: i32,
     pcm_data: &[i16],
 ) -> Result<Vec<u8>, String> {
+    encode_in_chunks(source_name, channel_count, sample_rate, frame_count, pcm_data, 16384)
+}
+
+fn encode_in_chunks(
+    source_name: &str,
+    channel_count: i32,
+    sample_rate: i32,
+    frame_count: i32,
+    pcm_data: &[i16],
+    chunk_frames: usize,
+) -> Result<Vec<u8>, String> {
     if !(1..=2).contains(&channel_count) || frame_count < 0
         || pcm_data.len() != frame_count as usize * channel_count as usize
     {
@@ -331,16 +342,16 @@ pub fn encode(
             ));
         }
 
-        // Convert 16-bit samples to 32-bit for libFLAC
-        let samples_32: Vec<i32> = pcm_data.iter().map(|&s| s as i32).collect();
-
-        if FLAC__stream_encoder_process_interleaved(
-            encoder.ptr,
-            samples_32.as_ptr(),
-            frame_count as u32,
-        ) == 0
-        {
-            return Err("Failed to encode FLAC data".to_string());
+        let chunk_samples = chunk_frames * channel_count as usize;
+        let mut samples_32 = Vec::with_capacity(chunk_samples.min(pcm_data.len()));
+        for chunk in pcm_data.chunks(chunk_samples) {
+            samples_32.clear();
+            samples_32.extend(chunk.iter().map(|&sample| sample as i32));
+            if FLAC__stream_encoder_process_interleaved(
+                encoder.ptr, samples_32.as_ptr(), (chunk.len() / channel_count as usize) as u32,
+            ) == 0 {
+                return Err("Failed to encode FLAC data".to_string());
+            }
         }
 
         if FLAC__stream_encoder_finish(encoder.ptr) == 0 {
@@ -437,6 +448,19 @@ pub fn decode(source_name: &str, data: &[u8]) -> Result<DecodedAudio, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_pcm_blocks_preserve_the_exact_bitstream() {
+        for channels in [1, 2] {
+            let frames = 48003;
+            let pcm: Vec<i16> = (0..frames * channels)
+                .map(|i| ((i as u32).wrapping_mul(7919) & 65535) as i16).collect();
+            let whole = encode_in_chunks("whole", channels, 48000, frames, &pcm, frames as usize).unwrap();
+            let blocked = encode("blocked", channels, 48000, frames, &pcm).unwrap();
+            assert_eq!(blocked, whole);
+            assert_eq!(decode("blocked", &blocked).unwrap().samples, pcm);
+        }
+    }
 
     const SAMPLE_FLAC: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),

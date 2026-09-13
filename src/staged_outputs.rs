@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -63,6 +64,28 @@ impl StagedOutputs {
         for staged in files {
             let relative = staged.strip_prefix(&self.root).unwrap();
             let destination = output_root.join(relative);
+            match files_equal(&staged, &destination) {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    let rollback_errors = rollback(&published);
+                    if rollback_errors.is_empty() {
+                        return Err(format!(
+                            "compare {}: {} (previous outputs restored)",
+                            destination.display(),
+                            error
+                        ));
+                    }
+                    self.preserve = true;
+                    return Err(format!(
+                        "compare {}: {}; rollback errors: {:?}; staging: {}",
+                        destination.display(),
+                        error,
+                        rollback_errors,
+                        self.root.display()
+                    ));
+                }
+            }
             let backup = self.root.join(".backup").join(relative);
             let result = (|| -> Result<(), String> {
                 let existing = if destination.exists() {
@@ -102,6 +125,36 @@ impl StagedOutputs {
         }
         Ok(())
     }
+}
+
+pub fn files_equal(source: &Path, destination: &Path) -> Result<bool, String> {
+    let mut source = fs::File::open(source).map_err(|e| e.to_string())?;
+    let mut destination = match fs::File::open(destination) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e.to_string()),
+    };
+    let length = source.metadata().map_err(|e| e.to_string())?.len();
+    if destination.metadata().map_err(|e| e.to_string())?.len() != length {
+        return Ok(false);
+    }
+    let mut left = [0u8; 65536];
+    let mut right = [0u8; 65536];
+    let mut remaining = length;
+    while remaining > 0 {
+        let count = remaining.min(left.len() as u64) as usize;
+        source
+            .read_exact(&mut left[..count])
+            .map_err(|e| e.to_string())?;
+        destination
+            .read_exact(&mut right[..count])
+            .map_err(|e| e.to_string())?;
+        if left[..count] != right[..count] {
+            return Ok(false);
+        }
+        remaining -= count as u64;
+    }
+    Ok(true)
 }
 
 fn rollback(files: &[PublishedFile]) -> Vec<String> {

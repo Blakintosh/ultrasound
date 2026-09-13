@@ -138,6 +138,40 @@ when appropriate, then run the audit again without `--record-baseline`. The
 recording command changes the snapshot before later tests run; a failed command
 does not approve that change. CI never records snapshots.
 
+## Performance and cache migration
+
+Warm builds compare full file contents before publishing. Unchanged deployed
+banks and sidecars keep their timestamps. Missing files and same-size deployment
+corruption are still repaired. Changed sources are read and hashed once, and the
+same buffer is passed to conversion. FLAC receives at most 16,384 frames of i32
+PCM at a time instead of allocating an i32 copy of the entire clip. Tests require
+the resulting FLAC bitstream to match a single-block encoding exactly.
+
+Measure two saved release executables with the same audio recipe:
+
+```powershell
+python scripts/benchmark.py --reference target/audit/pre-performance/ultrasound.exe --candidate target/release/ultrasound.exe --assets 128 --seconds 20 --repeats 5
+```
+
+Keep `libFLAC.dll` beside each executable. The benchmark alternates execution
+order, records clean/warm/single-edit timings and sampled peak working set, and
+requires equivalent output manifests for every comparison. These are generated
+high-entropy inputs, not a map or an OS-cold disk benchmark. See
+[the v1 progress report](v1-progress.md) for the measured results.
+
+To check a one-time cache migration from an older binary, and optionally a switch
+to an alternate encoder recipe and back:
+
+```powershell
+python scripts/audit.py --known-bugs --external --migration-reference target/audit/reference/ultrasound.exe --alternate-executable target/audit/hifi/ultrasound.exe
+```
+
+The saved references are local artifacts, not repository dependencies. Omit
+`--alternate-executable` if no alternate build is available. The migration check
+requires the older binary to have a different recipe; a same-version reference
+fails instead of pretending to cover an upgrade. The final default outputs must
+match the pinned baseline, and alternate outputs must match their clean build.
+
 ## Real-world acceptance
 
 Use a disposable copy of a known-working project. Select one typical map and one

@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use crate::bank::bank_header::BankHeader;
 use crate::bank::sound_asset_bank::SoundAssetBank;
-use crate::converter::{SoundAssetBankConvertedAsset, convert_source_inline};
+use crate::converter::{SoundAssetBankConvertedAsset, convert_source_data};
 use crate::obtainer::SoundAssetObtainer;
 use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
@@ -117,51 +117,32 @@ pub fn update_bank(
         }
     }
 
-    // Hash every desired source in parallel. Only read+hash — no decode.
-    // For sources whose checksum already matches the bank we skip entirely;
-    // the dominant cost here is the read, and it only applies to entries
-    // we would otherwise have walked past silently. The hash mixes in the
-    // asset's compression-level fingerprint so retuning a level — or
-    // reassigning an alias to a different level — invalidates the bank
-    // entry even when the source file bytes are unchanged.
+    // Retain a source buffer only when its checksum requires conversion.
     let desired_names: Vec<&String> = source_map.keys().collect();
-    let hashed: Vec<Result<(String, Checksum), String>> = desired_names
+    let converted: HashMap<String, (SoundAssetBankConvertedAsset, Vec<u8>)> = desired_names
         .par_iter()
-        .map(|name| {
-            let src = source_map
-                .get(*name)
-                .ok_or_else(|| format!("zone source lookup failed for '{}'", name))?;
+        .map(|name| -> Result<Option<_>, String> {
+            let src = &source_map[*name];
             let data = fs::read(&src.source_name)
                 .map_err(|e| format!("read {}: {}", src.source_name, e))?;
-            let fingerprint = src.compression_level.recipe_fingerprint();
-            Ok((
-                (*name).clone(),
-                Checksum::from_data_with_recipe(&data, &fingerprint),
-            ))
+            let checksum = Checksum::from_data_with_recipe(
+                &data, &src.compression_level.recipe_fingerprint(),
+            );
+            if existing_checksums.get(&string_hash::hash(name)) == Some(&checksum) {
+                return Ok(None);
+            }
+            let output = convert_source_data(src, data, checksum)?;
+            Ok(Some(((*name).clone(), output)))
         })
+        .collect::<Result<Vec<_>, String>>()?
+        .into_iter()
+        .flatten()
         .collect();
-
-    let mut current_checksums: HashMap<String, Checksum> =
-        HashMap::with_capacity(desired_names.len());
-    for r in hashed {
-        let (name, sum) = r?;
-        current_checksums.insert(name, sum);
-    }
-
-    let mut to_add: HashSet<String> = HashSet::new();
-    for name in source_map.keys() {
-        let name_hash = string_hash::hash(name);
-        let current = current_checksums.get(name).copied();
-        match existing_checksums.get(&name_hash) {
-            None => {
-                to_add.insert(name.clone());
-            }
-            Some(stored) => {
-                if current.map(|c| c != *stored).unwrap_or(true) {
-                    to_remove.insert(name_hash);
-                    to_add.insert(name.clone());
-                }
-            }
+    let to_add: HashSet<String> = converted.keys().cloned().collect();
+    for name in &to_add {
+        let hash = string_hash::hash(name);
+        if existing_checksums.contains_key(&hash) {
+            to_remove.insert(hash);
         }
     }
 
@@ -182,20 +163,6 @@ pub fn update_bank(
             to_remove.len()
         );
 
-        // 3. One-shot parallel convert: each worker does fs::read → RIFF parse →
-        //    PCM decode → envelope → resample → FLAC encode in a single pass over
-        //    one buffer. No shared source cache; workers are fully independent.
-        let converted: HashMap<String, (SoundAssetBankConvertedAsset, Vec<u8>)> = to_add
-            .par_iter()
-            .map(|name| {
-                let src = source_map
-                    .get(name)
-                    .ok_or_else(|| format!("obtainer: no source asset for '{}'", name))?;
-                let out = convert_source_inline(src)?;
-                Ok((name.clone(), out))
-            })
-            .collect::<Result<HashMap<_, _>, String>>()?;
-
         let mut obtainer = PreConvertedObtainer { converted };
 
         bank.modify(
@@ -209,7 +176,11 @@ pub fn update_bank(
 
     // 4. Deploy cache → ship (covers a missing ship copy on otherwise warm
     //    runs as well as the post-modify path).
-    deploy(&cache_path, &ship_path)?;
+    let deployed_path = snapshot.env.get_deploy_bank_dir(&language.deploy_name)
+        .join(format!("{}.{}", base_name, ext));
+    if !crate::staged_outputs::files_equal(&cache_path, &deployed_path)? {
+        deploy(&cache_path, &ship_path)?;
+    }
 
     // 5. Loaded-bank sidecars. Only the loaded variant emits these; the
     //    streamed bank doesn't have an asset/memory manifest in baseline.
