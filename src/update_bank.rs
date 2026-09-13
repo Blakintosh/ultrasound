@@ -118,20 +118,20 @@ pub fn update_bank(
     }
 
     // Retain a source buffer only when its checksum requires conversion.
+    let validation_path = cache_path.with_extension(format!("{ext}.usn.json"));
+    let validation = crate::source_validation::SourceValidation::load(&validation_path);
     let desired_names: Vec<&String> = source_map.keys().collect();
     let converted: HashMap<String, (SoundAssetBankConvertedAsset, Vec<u8>)> = desired_names
         .par_iter()
         .map(|name| -> Result<Option<_>, String> {
             let src = &source_map[*name];
-            let data = fs::read(&src.source_name)
-                .map_err(|e| format!("read {}: {}", src.source_name, e))?;
-            let checksum = Checksum::from_data_with_recipe(
-                &data, &src.compression_level.recipe_fingerprint(),
-            );
+            let (checksum, data) = validation.read(&src.source_name,
+                &src.compression_level.recipe_fingerprint(),
+                existing_checksums.get(&string_hash::hash(name)).copied())?;
             if existing_checksums.get(&string_hash::hash(name)) == Some(&checksum) {
                 return Ok(None);
             }
-            let output = convert_source_data(src, data, checksum)?;
+            let output = convert_source_data(src, data.expect("changed sources are read"), checksum)?;
             Ok(Some(((*name).clone(), output)))
         })
         .collect::<Result<Vec<_>, String>>()?
@@ -202,6 +202,7 @@ pub fn update_bank(
     }
 
     // Bank size warnings are disabled until the real limits are known.
+    validation.save(&validation_path);
     // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
     Ok(())
 }

@@ -18,6 +18,7 @@ mod sound_data_snapshot;
 mod sound_zone;
 mod sound_zone_config;
 mod source_asset_cache;
+mod source_validation;
 mod string_hash;
 mod staged_outputs;
 mod sz_writer;

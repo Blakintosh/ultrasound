@@ -6,6 +6,7 @@ import os
 import platform
 from pathlib import Path
 import random
+import re
 import statistics
 import subprocess
 import tempfile
@@ -65,6 +66,7 @@ def main():
     parser.add_argument("--assets", type=int, default=64)
     parser.add_argument("--seconds", type=int, default=10)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--require-journal-hits", action="store_true", help="require candidate to reuse every unchanged source")
     parser.add_argument("--out", type=Path, default=Path("target/audit/benchmark.json"))
     args = parser.parse_args()
     require(args.assets > 0 and args.seconds > 0 and args.repeats > 0, "benchmark sizes must be positive")
@@ -99,6 +101,11 @@ def main():
                                 stream.seek(1000)
                                 stream.write(bytes([value ^ 1]))
                         measured = measure(project, scenario)
+                        if args.require_journal_hits and name == "candidate":
+                            actual = sum(map(int, re.findall(r"source validation: (\d+) journal hits", measured["stdout"])))
+                            expected = {"clean": 0, "warm": args.assets + 6, "single_edit": args.assets + 5}[scenario]
+                            require(actual == expected, f"{scenario}: expected {expected} journal hits, got {actual}")
+                            measured["journal_hits"] = actual
                         measured.update(binary=name, repetition=repetition + 1)
                         snapshot = project.snapshot()
                         if scenario in reference_outputs:

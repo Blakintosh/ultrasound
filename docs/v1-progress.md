@@ -68,6 +68,71 @@ the candidate is
 These results support keeping the changes. They do not predict gains on a
 particular map, slower disk, or different asset mix.
 
+## NTFS source validation
+
+The `codex/v1-journal-validation` branch adds checksum reuse for unchanged local
+NTFS sources, with full hashing on uncertainty. It retains the existing checksum
+and audio formats. The reference for this comparison is `c7abdea`, after the
+earlier performance changes.
+
+The fast path requires matching volume/journal/file identities, file USN, size,
+recipe and the bank's stored checksum, plus a retained validation checkpoint.
+Read handles exclude writers and writable mappings. Inputs that cannot be opened
+that way use the previous full-content validation behavior. Missing/malformed
+validation records and unavailable tracking also use full hashing. Checksums
+remain available with `ULTRASOUND_FULL_HASH` set, including for integrity scans
+that must detect corruption outside normal filesystem writes.
+
+Validation passed:
+
+- 58 Rust tests in each feature configuration: 48 existing tests and 10 new
+  journal tests. All 24 external fixture tests and three Python capture tests
+  also passed.
+- 36 dedicated parity scenarios against `c7abdea`, then the same 36 against the
+  candidate with full hashing forced: 144 CLI invocations. Real cache hits are
+  required; a fallback cannot pass as a working optimization.
+- The full compatibility audit, including recipe migration, publication failure
+  recovery, deployment corruption repair, settings changes and B007 reproduction.
+- 84 timed CLI builds across large and small generated workloads, with matching
+  independently parsed output manifests and exact encoded payload hashes.
+
+The large workload is the same 128 generated stereo WAVs of 20 seconds plus
+baseline fixtures, producing 492,899,072 deployed bytes. Seven repetitions per
+binary/scenario ran in alternating order, separately from compilation and tests.
+Every warm candidate build reused 134 source checksums; every single-edit build
+reused 133. Median wall times:
+
+| Scenario | Full hashing | Journal validation | Change |
+| --- | ---: | ---: | ---: |
+| Clean build | 1.2578 s | 1.2988 s | 3.3% slower |
+| Unchanged build | 0.2489 s | 0.1364 s | 45.2% less time |
+| Single source edit | 0.3843 s | 0.3328 s | 13.4% less time |
+
+Warm-build maximum observed process working set fell from 68.7 MB to 8.7 MB;
+single-edit working set fell from 73.3 MB to 17.2 MB. Cold memory was similar.
+Timing noise was substantial: warm candidate samples ranged from 0.1276 s to
+2.0155 s, with six of seven below 0.15 s. All samples remain in the report;
+none were discarded. These medians are local observations, not promised gains.
+
+A second workload with eight one-second assets (1,584,896 deployed bytes) showed
+no meaningful speed difference: about 75 ms cold, 41 ms warm and 57 ms for an edit.
+The benefit depends on how much source data a build would otherwise hash.
+
+Local evidence is in `target/audit/journal-audit-final.json`,
+`target/audit/journal-parity.json`, `target/audit/journal-self-parity.json`,
+`target/audit/journal-performance-final.json` and
+`target/audit/journal-performance-small.json`. The reference executable SHA-256 is
+`665368432f38c48859693811ad601016d3c92ba98e4a4c0460ff76ccfee39a1b`;
+the candidate is
+`9e196322adda353946557993371b8e9b000fcc2250d2d9b9752a8d2c48961688`.
+
+Journal resets and retention gaps were simulated, without changing the host's
+journal. Unsupported filesystems and network shares retain full hashing but
+were not exercised on separate physical storage. This does not establish
+whole-project consistency during concurrent editing or replace in-game tests.
+The CI workflow includes the dedicated parity suite; hosted execution remains
+unverified.
+
 ## Remaining acceptance work
 
 The local audit covers portable tests in both feature configurations, the 24

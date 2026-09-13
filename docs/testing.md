@@ -15,7 +15,8 @@ On Windows, install Rust with the MSVC toolchain, its C/C++ build tools, and Pyt
 python scripts/audit.py --known-bugs
 ```
 
-This runs portable Rust tests with default and all features, checks the known
+This runs Rust tests with default and all features, including native NTFS
+validation tests, checks the known
 unit failures individually, builds the default release executable, and runs it
 against generated inputs in an isolated temporary game directory. Environment
 variables are set on child processes only. It does not use your installed game.
@@ -23,7 +24,59 @@ variables are set on child processes only. It does not use your installed game.
 `target/audit/report.json` records commands, exit codes, logs, timings, compiler,
 commit, working-tree status, executable/DLL hashes and fixture hashes. CI runs
 the same command and uploads this report even on failure. CI has been configured;
-a local run does not prove the hosted workflow has run successfully.
+a local run does not prove the hosted workflow has run successfully. The native
+validation tests require an active NTFS journal on the temporary directory's
+volume. They fail if they cannot exercise actual checksum reuse.
+
+## Journal validation
+
+Local NTFS inputs can reuse their last checksum when their volume, journal,
+file identity, file USN, size and conversion recipe match. A retained validation
+checkpoint is also required. Checkpoints record when content was validated, so
+an old source file can benefit even after its original change record expires.
+The source is opened without write/delete sharing while checking or reading it.
+An open writer or writable mapping causes full hashing without saving a stamp.
+
+Unknown journal state, expired checkpoints, unsupported storage, missing cache
+records and malformed cache JSON all cause full hashing. Validation records live
+beside cached banks as `*.usn.json`; deleting them costs a fresh hash pass. Output
+banks still undergo full byte comparison before deployment. Tables and FileSpec
+directories are still evaluated on every build.
+
+Set `ULTRASOUND_FULL_HASH` to any value to force source hashing. This is also the
+appropriate mode for checking content after suspected silent corruption or
+writes outside normal filesystem operations. Journal validation tracks filesystem
+changes; it does not provide an independent disk-integrity scan. Neither mode
+creates a project-wide snapshot while other programs are editing the project.
+
+Run the dedicated parity tests after building release:
+
+```powershell
+python scripts/test_journal.py
+python scripts/test_journal.py --reference target/audit/pre-journal/ultrasound.exe
+```
+
+Without a reference argument, the script compares the candidate's journal path
+with its forced-hashing path. With a reference, it compares against that binary.
+Both compare independently parsed bank metadata, encoded payload hashes and
+sidecars, and require real cache hits. CI runs the first command after the audit.
+
+The cases include timestamp-preserving edits, older replacements, hard links,
+open writers, repeated mapped writes after the original file handle closes,
+unusable checkpoints, changed journal/file identities, malformed records,
+deletion/recreation, alias redirection, and folder additions/renames/removals.
+Journal resets and retention gaps are simulated in cached state/unit tests;
+the tests never delete or resize the machine's journal. Folder tests preserve
+the current B007 behavior, not a completed variation feature.
+
+For repeated timings with cache-hit assertions:
+
+```powershell
+python scripts/benchmark.py --reference target/audit/pre-journal/ultrasound.exe --candidate target/release/ultrasound.exe --assets 128 --seconds 20 --repeats 7 --require-journal-hits --out target/audit/journal-performance-final.json
+```
+
+Run benchmarks separately from compilation and other test suites. The reference
+path above is a locally retained binary, not a tracked repository file.
 
 ## Coverage and limits
 

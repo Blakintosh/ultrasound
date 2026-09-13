@@ -20,8 +20,12 @@ jobs:
           python-version: '3.12'
       - name: Unit, pipeline and known-bug checks
         run: python scripts/audit.py --known-bugs
+      - name: NTFS journal parity against full hashing
+        run: python scripts/test_journal.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: compatibility-audit
-          path: target/audit/report.json
+          path: |
+            target/audit/report.json
+            target/audit/journal-parity.json
