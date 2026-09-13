@@ -2,8 +2,9 @@
 
 The compatibility reference is `5ebfe3a` (v0.3.1). Work starts on
 `codex/v1-regression-baseline`; the package version stays unchanged until release
-behavior changes. Do not treat the reference as proof that every current behavior
-is correct.
+behavior changes. The expected snapshot now includes the documented v1 corrections
+below; its generated inputs are unchanged. Do not treat the reference as proof
+that every original behavior is correct.
 
 ## Run the audit
 
@@ -48,8 +49,10 @@ neither replaces an engine test.
 Absolute temporary paths are replaced with `<GAME>`. Asset-list ordering is
 normalized because incremental and clean builds may pack assets in different
 orders. Names, metadata, payloads and other sidecar contents remain compared.
-The reference intentionally characterizes current default encoder quantization.
-It is not an endorsement of that behavior (see B008).
+The updated reference requires lossless encoding when no lossy level is selected.
+The original snapshot remains available in commit `96026a6`. The snapshot changes
+were limited to recipe checksums, encoded payloads and their memory totals; alias
+contents and the existing long-clip metadata remained unchanged.
 
 Timing reports describe this tiny fixture and filesystem-warm runs. They are not
 speedup claims, and CI has no noisy wall-clock threshold. Measure a large corpus
@@ -81,35 +84,42 @@ the original map or launch the game. The exploratory `lossy_prepass_shrinks_flac
 experiment stays outside acceptance runs and can be invoked explicitly with
 `cargo test --release lossy_prepass_shrinks_flac -- --ignored --nocapture`.
 
-## Known failures
+## Regression status
 
-The audit exits successfully only if required tests pass and each requested
-known-bug probe reproduces its specific documented failure. An unexpected pass,
-compilation error, missing test, or different panic is not an accepted repro.
-Unit probes assert the desired behavior and are ignored by ordinary test runs.
-The pipeline probes explicitly assert the current broken state.
+The formerly failing unit probes now run as required tests. The remaining known
+failure is B007, folder FileSpecs. `--known-bugs` verifies that its documented
+limitation still reproduces; it does not count it as a feature acceptance pass.
 
-| ID | Reproducer | Expected current failure |
+| ID | Status | Required behavior |
 | --- | --- | --- |
-| B001 | `zero_block_alignment_returns_error` | Zero WAV block alignment panics instead of returning an error |
-| B002 | `padded_odd_riff_chunk_is_accepted` | A valid padded odd-sized JUNK chunk is rejected |
-| B003 | `short_envelope_uses_same_units_as_long_envelope` | Equal amplitudes produce incompatible short/long envelope units |
-| B004 | `one_frame_resample_does_not_panic` | Debug arithmetic underflows for a one-frame input; not a release-panic claim |
-| B005 | `distinct_alias_settings_survive_deduplication` | Different storage/volume rows are silently collapsed |
-| B006 | Pipeline corrupt-empty-cache case | The corrupt cache is copied to deployment with exit code zero |
-| B007 | Pipeline folder FileSpec case | Two assets are encoded but only the first is referenced by the alias |
-| B008 | `default_encoder_preserves_unprocessed_samples` | Default encoder clears a sample bit without a lossy prepass |
-| B009 | Pipeline changed-template/invalid-audio case | Failed conversion leaves changed aliases beside the previous bank |
+| B001 | Fixed | Zero WAV block alignment returns an error without panicking |
+| B002 | Fixed | Valid padded odd-sized RIFF chunks parse |
+| B003 | Fixed | Short and long envelopes use the same dB SPL units |
+| B004 | Fixed | Tiny resampling inputs preserve frames without underflow |
+| B005 | Fixed | Only fully identical alias rows are deduplicated |
+| B006 | Fixed | Corrupt empty/populated caches rebuild assets and header identity |
+| B007 | Open | Folder enumeration encodes two assets but references only the first |
+| B008 | Fixed | The default encoder preserves every input sample bit |
+| B009 | Fixed for handled failures | Failed conversion publishes no changed files; publication errors roll back |
 
-B008 is a default-feature probe. B004 deliberately runs in debug. Other report
-findings, including incomplete recipe invalidation across builds, bank bounds
-handling, long names and unused CLI/configuration options, remain inspection
-findings until a dedicated executable acceptance test is added.
+The conversion fingerprint includes an algorithm revision and encoder effort.
+Existing cached assets therefore reconvert once after these audio fixes, and
+switching `flac_hifi` invalidates cached encodings. That feature now changes only
+encoder effort (5 instead of 8); explicit lossy levels still apply their masks
+and silence gates before encoding.
 
-For a fix: run its probe and confirm the failure; remove its ignore attribute,
-remove its entry from the expected-failure registry, and make the assertion pass.
-For a pipeline fix, replace the broken-state assertion with an ordinary required
-recovery test. Run the whole audit. Do not weaken an assertion to keep it green.
+Publication is staged per zone and locale. It protects deployed outputs from
+conversion failures, and attempts rollback on publication errors. If rollback
+fails, its backups are retained and their location is reported. This is not a
+crash-atomic multi-file filesystem transaction. Power loss, concurrent builds of
+the same bank, and a later locale failing after an earlier locale published still
+need a broader recovery protocol. Cache files may have advanced after a failed
+build; the next successful run repairs deployment from them.
+
+Other inspection findings, including bank bounds handling, long names and unused
+CLI/configuration options, remain outside these fixes. Every new fix needs a
+specific acceptance test before production changes. Do not weaken an assertion
+to keep the audit green.
 
 ## Updating a reference
 

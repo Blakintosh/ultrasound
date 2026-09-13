@@ -21,7 +21,7 @@ impl AssetEnvelope {
                 samples.iter().map(|&x| x.unsigned_abs()).max().unwrap_or(0) as f64 / 32768.0;
 
             return AssetEnvelope {
-                left: vec![peak, peak, peak, peak],
+                left: vec![linear_to_db_spl(peak); 4],
                 time: vec![0.0, 0.3, 0.6, 1.0],
             };
         }

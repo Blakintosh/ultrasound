@@ -17,12 +17,6 @@ import wave
 REPO = Path(__file__).resolve().parents[1]
 BASELINE = REPO / "tests/fixtures/baseline.json"
 BUGS = {
-    "B001": "zero_block_alignment_returns_error",
-    "B002": "padded_odd_riff_chunk_is_accepted",
-    "B003": "short_envelope_uses_same_units_as_long_envelope",
-    "B004": "one_frame_resample_does_not_panic",
-    "B005": "distinct_alias_settings_survive_deduplication",
-    "B008": "default_encoder_preserves_unprocessed_samples",
 }
 
 
@@ -294,6 +288,31 @@ def pipeline(exe, report, record=False):
         project.run("corrected source")
         require(project.snapshot() == before_error, "failed build did not recover")
         project.clean_equivalent("corrected source")
+        for language in ("fr", "all"):
+            before_corruption = project.snapshot()
+            project.bank(language, cache=True).write_bytes(b"invalid cached bank")
+            project.run(f"recover corrupt {language} cache")
+            require(project.snapshot() == before_corruption,
+                    f"corrupt {language} cache did not rebuild assets and header identity")
+        before_failure = project.snapshot()
+        project.template(60)
+        tone.write_bytes(b"invalid audio")
+        project.run("failed conversion with changed template", success=False)
+        require(project.snapshot() == before_failure, "failed build published changed aliases")
+        tone.write_bytes(valid)
+        project.run("recover changed template")
+        project.clean_equivalent("recover changed template")
+        before_failure = project.snapshot()
+        music = project.root / "sound_assets/music.wav"
+        valid_music = music.read_bytes()
+        music.write_bytes(b"invalid streamed audio")
+        audio(tone, amplitude=2000)
+        project.run("streamed failure while loaded bank changes", success=False)
+        require(project.snapshot() == before_failure, "one failed bank partially published the other bank")
+        music.write_bytes(valid_music)
+        project.run("recover partially prepared cache")
+        project.clean_equivalent("recover partially prepared cache")
+        require(not list((project.root / "pc").glob(".ultrasound-stage-*")), "staging directories leaked")
         report["pipeline"] = "passed"
 
 
@@ -301,12 +320,6 @@ def pipeline_bugs(exe, report):
     with tempfile.TemporaryDirectory(prefix="ultrasound-bugs-") as directory:
         project = Project(Path(directory), exe, report["runs"])
         project.run("B006 setup")
-        corrupt = b"corrupt empty bank"
-        project.bank("fr", cache=True).write_bytes(corrupt)
-        project.run("B006 corrupt empty cache", languages=("fr",))
-        require(project.bank("fr").read_bytes() == corrupt,
-                "B006 no longer reproduces; promote corrupt-cache recovery to required tests")
-        report["known_bugs"]["B006"] = "reproduced: corrupt empty bank deployed successfully"
         audio(project.root / "sound_assets/variations/one.wav")
         audio(project.root / "sound_assets/variations/two.wav", amplitude=6000)
         project.rows = [{"Name": "variation", "Template": "base", "FileSpec": "variations"}]
@@ -317,15 +330,6 @@ def pipeline_bugs(exe, report):
         require(len(assets) == 2 and len(rows) == 1 and rows[0]["FileTarget"] == "variations\\one.LN100.pc.snd",
                 "B007 behavior changed; review folder semantics and update its acceptance tests")
         report["known_bugs"]["B007"] = "reproduced: two bank assets, only first referenced"
-        old_bank = project.bank().read_bytes()
-        alias_path = project.root / "pc/sound/zone/audit.all.alias.sz"
-        old_alias = alias_path.read_bytes()
-        project.template(65)
-        (project.root / "sound_assets/variations/one.wav").write_bytes(b"invalid audio")
-        failed = project.run("B009 failed conversion after alias edit", success=False, languages=("all",))
-        require("one.wav" in failed.stderr and project.bank().read_bytes() == old_bank and
-                alias_path.read_bytes() != old_alias, "B009 behavior changed; review atomic output acceptance")
-        report["known_bugs"]["B009"] = "reproduced: failed build publishes new aliases beside old bank"
 
 
 def main():

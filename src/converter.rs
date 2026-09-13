@@ -83,7 +83,7 @@ impl CompressionLevel {
     /// the source checksum so that any retune — switching an asset's level
     /// *or* changing what a level means in code — invalidates the bank entry
     /// and forces reconversion. Update this if you add a new dimension.
-    pub fn recipe_fingerprint(self) -> [u8; 13] {
+    pub fn recipe_fingerprint(self) -> [u8; 18] {
         let mask = self.truncate_mask().to_le_bytes();
         let gate_window = (Self::GATE_WINDOW_FRAMES as u64).to_le_bytes();
         let (has_gate, threshold) = match self.silence_gate_threshold() {
@@ -105,6 +105,9 @@ impl CompressionLevel {
             has_gate,
             threshold[0],
             threshold[1],
+            // Revision 2 also removes the encoder's implicit lossy sample mask.
+            2, 0, 0, 0,
+            if cfg!(feature = "flac_hifi") { 5 } else { 8 },
         ]
     }
 }
@@ -391,7 +394,7 @@ mod tests {
         let mut encoded_window = [0u8; 8];
         encoded_window.copy_from_slice(&fingerprint[2..10]);
 
-        assert_eq!(fingerprint.len(), 13);
+        assert_eq!(fingerprint.len(), 18);
         assert_eq!(
             u64::from_le_bytes(encoded_window),
             CompressionLevel::GATE_WINDOW_FRAMES as u64

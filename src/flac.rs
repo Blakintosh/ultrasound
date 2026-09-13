@@ -286,9 +286,11 @@ pub fn encode(
     frame_count: i32,
     pcm_data: &[i16],
 ) -> Result<Vec<u8>, String> {
-    let total_samples = frame_count * channel_count;
-
-    let mask = if cfg!(feature = "flac_hifi") { !0 } else { !1 };
+    if !(1..=2).contains(&channel_count) || frame_count < 0
+        || pcm_data.len() != frame_count as usize * channel_count as usize
+    {
+        return Err(format!("Invalid PCM dimensions for {}", source_name));
+    }
 
     unsafe {
         let encoder = FlacEncoder {
@@ -330,7 +332,7 @@ pub fn encode(
         }
 
         // Convert 16-bit samples to 32-bit for libFLAC
-        let samples_32: Vec<i32> = pcm_data.iter().map(|&s| (s & mask) as i32).collect();
+        let samples_32: Vec<i32> = pcm_data.iter().map(|&s| s as i32).collect();
 
         if FLAC__stream_encoder_process_interleaved(
             encoder.ptr,

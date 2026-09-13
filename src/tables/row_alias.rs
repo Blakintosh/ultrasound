@@ -62,7 +62,7 @@ where
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct RowAlias {
     #[serde(rename = "Name", default)]
     pub name: String,

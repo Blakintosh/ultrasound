@@ -442,46 +442,21 @@ impl SoundZone {
     }
 }
 
-/// Drop alias rows that duplicate a row already kept earlier in the vec.
-///
-/// Alias CSVs commonly share rows across files (e.g. a weapon's base foley
-/// is repeated verbatim in its `_v21` variant CSV) and authors also
-/// copy-paste rows within a single CSV (e.g. nine empty-FileSpec config
-/// rows followed by nine specific-FileSpec variants). Dedup keeps the
-/// first occurrence keyed by name + the three FileSpec columns + all four
-/// `(ContextType, ContextValue)` pairs — anything matching that key
-/// downstream is dropped.
-///
-/// **The context fields MUST be part of the key.** A single alias name
-/// often has multiple rows that share a FileSpec but route to a different
-/// audio variant via context (e.g. `train=city` for ADS, `train=country`
-/// for hipfire, both pointing at the same hammer .wav). Collapsing those
-/// would drop one of the contexts and silence that playback path at
-/// runtime — see the `dedup_aliases_preserves_context_distinct_rows`
-/// regression test.
+/// Drop fully identical rows while preserving input order and every differing field.
 pub(crate) fn dedup_aliases(aliases: &mut Vec<RowAlias>) {
-    type AliasDedupKey = (
-        String, String, String, String, // name + 3 file specs
-        String, String, String, String, // 2 of the 4 context pairs (flattened)
-        String, String, String, String, // remaining 2 context pairs
-    );
-    let mut seen: HashSet<AliasDedupKey> = HashSet::new();
-    aliases.retain(|a| {
-        seen.insert((
-            a.name.clone(),
-            a.file_spec.clone(),
-            a.file_spec_sustain.clone(),
-            a.file_spec_release.clone(),
-            a.context_type.clone(),
-            a.context_value.clone(),
-            a.context_type_1.clone(),
-            a.context_value_1.clone(),
-            a.context_type_2.clone(),
-            a.context_value_2.clone(),
-            a.context_type_3.clone(),
-            a.context_value_3.clone(),
-        ))
-    });
+    let mut groups: HashMap<(String, String, String, String), Vec<usize>> = HashMap::new();
+    let mut unique: Vec<RowAlias> = Vec::with_capacity(aliases.len());
+    for alias in std::mem::take(aliases) {
+        let group = groups.entry((
+            alias.name.clone(), alias.file_spec.clone(),
+            alias.file_spec_sustain.clone(), alias.file_spec_release.clone(),
+        )).or_default();
+        if !group.iter().any(|&index| unique[index] == alias) {
+            group.push(unique.len());
+            unique.push(alias);
+        }
+    }
+    *aliases = unique;
 }
 
 /// Sort order on emitted alias rows: name, file_spec, file_target, then

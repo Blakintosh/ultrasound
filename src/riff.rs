@@ -86,7 +86,7 @@ impl Riff {
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
-                .seek(SeekFrom::Current(chunk_size as i64))
+                .seek(SeekFrom::Current(chunk_size as i64 + (chunk_size & 1) as i64))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
@@ -98,6 +98,9 @@ impl Riff {
                 file_name, e
             )
         })?;
+        if fmt_chunk_size < 16 || fmt_data_start + fmt_chunk_size > length {
+            return Err(format!("File {} has invalid fmt chunk size.", file_name));
+        }
 
         // Grab the format properties.
         let format = read_u16(&mut reader)?;
@@ -106,9 +109,14 @@ impl Riff {
         let _byte_rate = read_u32(&mut reader)?;
         let frame_size = read_u16(&mut reader)?;
         let _bits_per_sample = read_u16(&mut reader)?;
+        if channel_count == 0 || frame_size == 0 || frame_rate == 0
+            || frame_size % channel_count != 0
+        {
+            return Err(format!("File {} has invalid audio dimensions.", file_name));
+        }
 
         // Now leave the fmt chunk, and seek out the "data" chunk.
-        let fmt_end = fmt_data_start + fmt_chunk_size;
+        let fmt_end = fmt_data_start + fmt_chunk_size + (fmt_chunk_size & 1);
         pos = fmt_end;
         reader
             .seek(SeekFrom::Start(fmt_end))
@@ -129,7 +137,7 @@ impl Riff {
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
-                .seek(SeekFrom::Current(chunk_size as i64))
+                .seek(SeekFrom::Current(chunk_size as i64 + (chunk_size & 1) as i64))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
@@ -279,7 +287,16 @@ impl Riff {
     pub fn resize(input: &[i16], channel_count: u32, output_frame_count: u32) -> Vec<i16> {
         let ch = channel_count as usize;
         let out_frames = output_frame_count as usize;
+        if ch == 0 || input.is_empty() || out_frames == 0 {
+            return Vec::new();
+        }
         let in_frames = input.len() / ch;
+        if in_frames == 1 {
+            return input[..ch].repeat(out_frames);
+        }
+        if in_frames == 0 {
+            return Vec::new();
+        }
         let mut result = vec![0i16; out_frames * ch];
 
         for channel in 0..ch {

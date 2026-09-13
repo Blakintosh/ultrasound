@@ -19,6 +19,7 @@ mod sound_zone;
 mod sound_zone_config;
 mod source_asset_cache;
 mod string_hash;
+mod staged_outputs;
 mod sz_writer;
 mod tables;
 mod units;
@@ -151,26 +152,25 @@ fn single_zone(
         zone.streamed_files.len(),
     );
 
-    // Per-zone .sz sidecars (alias / reverb / ambient / ducklist / musiclist).
-    // These are the inputs the engine and downstream zone-build steps read,
-    // so they must land before the banks are deployed. Bank-derived sidecars
-    // (memory / assetcount / assets) are emitted by `update_bank` itself.
+    let mut staged = staged_outputs::StagedOutputs::new(snapshot.env.get_platform_working_dir())?;
+    let output_env = snapshot.env.with_output_root(staged.root());
     let locale = snapshot
         .get_locale(language)
         .cloned()
         .ok_or_else(|| format!("unknown language '{}'", language))?;
-    zone.write_outputs(&snapshot.env, &config, &locale)?;
+    zone.write_outputs(&output_env, &config, &locale)?;
 
     // Build both banks concurrently — they share the same rayon pool for
     // FLAC encoding, so the win is mostly from eliminating the gap between
     // the two sequential runs rather than 2x throughput.
     let snap: &SoundDataSnapshot = snapshot;
     let (r_loaded, r_streamed) = rayon::join(
-        || update_bank(snap, &zone, platform, language, false),
-        || update_bank(snap, &zone, platform, language, true),
+        || update_bank(snap, &output_env, &zone, platform, language, false),
+        || update_bank(snap, &output_env, &zone, platform, language, true),
     );
     r_loaded?;
     r_streamed?;
+    staged.publish(snapshot.env.get_platform_working_dir())?;
     Ok(())
 }
 

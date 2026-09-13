@@ -31,6 +31,7 @@ const BANK_WARN_THRESHOLD_PCT: u64 = 85;
 /// streamed bank (`streamed=true`, `.sabs`).
 pub fn update_bank(
     snapshot: &SoundDataSnapshot,
+    output_env: &crate::env::Env,
     zone: &SoundZone,
     platform_name: &str,
     language_name: &str,
@@ -55,7 +56,7 @@ pub fn update_bank(
     let base_name = format!("{}.{}", zone.name, language.deploy_name);
 
     let cache_dir = snapshot.env.get_cache_bank_dir(&language.cache_name);
-    let ship_dir = snapshot.env.get_deploy_bank_dir(&language.deploy_name);
+    let ship_dir = output_env.get_deploy_bank_dir(&language.deploy_name);
     fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("create cache dir {}: {}", cache_dir.display(), e))?;
     fs::create_dir_all(&ship_dir)
@@ -78,6 +79,12 @@ pub fn update_bank(
         hdr.invalidate();
         SoundAssetBank::new_empty(cache_path.to_str().unwrap(), hdr)
     };
+    let cache_valid = fs::metadata(&cache_path)
+        .map(|metadata| bank.is_sane(metadata.len() as i64).is_ok())
+        .unwrap_or(false);
+    bank.set_zone_name(&zone.name);
+    bank.set_platform(&platform.platform);
+    bank.set_language(&language.deploy_name);
 
     // 2. Diff against zone's desired asset list.
     //
@@ -158,10 +165,9 @@ pub fn update_bank(
         }
     }
 
-    let cache_missing = !cache_path.exists();
     let no_changes = to_add.is_empty() && to_remove.is_empty();
     if no_changes {
-        if cache_missing {
+        if !cache_valid {
             println!("  {}.{}: create empty", base_name, ext);
             bank.write_current(platform.converted_asset_version, false)?;
         } else {
@@ -210,7 +216,7 @@ pub fn update_bank(
     //    Always re-emit to keep the files consistent with the bank on disk
     //    even when nothing changed (e.g. the manifest was deleted by hand).
     if !streamed {
-        let dir = snapshot.env.get_zone_output_dir(&language.name);
+        let dir = output_env.get_zone_output_dir(&language.name);
         let path_for =
             |kind: &str| dir.join(format!("{}.{}.{}.sz", zone.name, language.name, kind));
 

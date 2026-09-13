@@ -40,7 +40,71 @@ fn synthetic_pcm_wav_decodes_exactly() {
 }
 
 #[test]
-fn synthetic_flac_preserves_channels_frames_and_current_quantization() {
+fn invalid_wav_dimensions_and_fmt_lengths_return_errors() {
+    for (offset, replacement) in [
+        (22, 0u16.to_le_bytes().to_vec()),
+        (24, 0u32.to_le_bytes().to_vec()),
+        (16, 12u32.to_le_bytes().to_vec()),
+        (16, 200u32.to_le_bytes().to_vec()),
+    ] {
+        let mut bytes = wav(2, false);
+        bytes[offset..offset + replacement.len()].copy_from_slice(&replacement);
+        assert!(Riff::parse("invalid.wav", &bytes).is_err());
+    }
+}
+
+#[test]
+fn odd_chunks_after_fmt_and_short_stereo_audio_work() {
+    let mut bytes = wav(2, false);
+    bytes.splice(36..36, b"JUNK\x01\0\0\0x\0".iter().copied());
+    let size = bytes.len() as u32 - 8;
+    bytes[4..8].copy_from_slice(&size.to_le_bytes());
+    let parsed = Riff::parse("post-fmt.wav", &bytes).unwrap();
+    assert_eq!(
+        parsed.decode_interleaved_s16_from_slice(&bytes).unwrap(),
+        [100, -100]
+    );
+    assert_eq!(
+        Riff::resize(&[-32768, 32767], 2, 3),
+        [-32768, 32767, -32768, 32767, -32768, 32767]
+    );
+    assert!(Riff::resize(&[], 1, 3).is_empty());
+}
+
+#[test]
+fn short_envelope_handles_silence_and_full_scale() {
+    assert_eq!(AssetEnvelope::envelope_extract(0, 1, &[]).left, [0.0; 4]);
+    assert_eq!(
+        AssetEnvelope::envelope_extract(1, 1, &[-32768]).left,
+        [100.0; 4]
+    );
+}
+
+#[test]
+fn flac_rejects_inconsistent_pcm_dimensions() {
+    assert!(flac::encode("short", 2, 48000, 2, &[100]).is_err());
+    assert!(flac::encode("zero-channels", 0, 48000, 2, &[]).is_err());
+    assert!(flac::encode("negative-frames", 1, 48000, -1, &[]).is_err());
+}
+
+#[test]
+fn dedup_preserves_platform_and_compression_variants() {
+    let mut reader = csv::Reader::from_reader(
+        b"Name,FileSpec,PlatformMask,CompressionLevel\na,tone.wav,pc,None\na,tone.wav,console,None\na,tone.wav,pc,High\na,tone.wav,pc,None\n".as_slice(),
+    );
+    let mut aliases: Vec<RowAlias> = reader.deserialize().map(Result::unwrap).collect();
+    sound_zone::dedup_aliases(&mut aliases);
+    assert_eq!(aliases.len(), 3);
+    assert_eq!(aliases[0].platform_mask, "pc");
+    assert_eq!(aliases[1].platform_mask, "console");
+    assert_eq!(
+        aliases[2].compression_level,
+        Some(crate::converter::CompressionLevel::High)
+    );
+}
+
+#[test]
+fn synthetic_flac_preserves_channels_frames_and_samples() {
     for channels in [1, 2] {
         let pcm: Vec<i16> = (0..4096 * channels)
             .map(|i| (i % 30001 - 15000) as i16)
@@ -50,11 +114,7 @@ fn synthetic_flac_preserves_channels_frames_and_current_quantization() {
         assert_eq!(audio.frame_count, 4096);
         assert_eq!(audio.channel_count, channels as u16);
         assert_eq!(audio.frame_rate, 48000);
-        let mask = if cfg!(feature = "flac_hifi") { !0 } else { !1 };
-        assert_eq!(
-            audio.samples,
-            pcm.iter().map(|s| s & mask).collect::<Vec<_>>()
-        );
+        assert_eq!(audio.samples, pcm);
     }
 }
 
@@ -95,8 +155,6 @@ mod known_bugs {
     use super::*;
 
     #[test]
-    #[cfg(not(feature = "flac_hifi"))]
-    #[ignore = "known bug B008; default encoder changes samples without a lossy prepass"]
     fn default_encoder_preserves_unprocessed_samples() {
         let pcm = vec![1001i16; 2048];
         let encoded = flac::encode("unprocessed", 1, 48000, 2048, &pcm).unwrap();
@@ -108,7 +166,6 @@ mod known_bugs {
     }
 
     #[test]
-    #[ignore = "known bug B001; run scripts/audit.py --known-bugs"]
     fn zero_block_alignment_returns_error() {
         let result = std::panic::catch_unwind(|| Riff::parse("zero.wav", &wav(0, false)));
         assert!(
@@ -118,7 +175,6 @@ mod known_bugs {
     }
 
     #[test]
-    #[ignore = "known bug B002; run scripts/audit.py --known-bugs"]
     fn padded_odd_riff_chunk_is_accepted() {
         assert!(
             Riff::parse("odd.wav", &wav(2, true)).is_ok(),
@@ -127,7 +183,6 @@ mod known_bugs {
     }
 
     #[test]
-    #[ignore = "known bug B003; run scripts/audit.py --known-bugs"]
     fn short_envelope_uses_same_units_as_long_envelope() {
         let short = AssetEnvelope::envelope_extract(512, 1, &vec![16384; 512]);
         let long = AssetEnvelope::envelope_extract(1024, 1, &vec![16384; 1024]);
@@ -138,7 +193,6 @@ mod known_bugs {
     }
 
     #[test]
-    #[ignore = "known bug B004; debug arithmetic reproducer"]
     fn one_frame_resample_does_not_panic() {
         let result = std::panic::catch_unwind(|| Riff::resize(&[100], 1, 2));
         assert!(
@@ -148,7 +202,6 @@ mod known_bugs {
     }
 
     #[test]
-    #[ignore = "known bug B005; run scripts/audit.py --known-bugs"]
     fn distinct_alias_settings_survive_deduplication() {
         let mut reader = csv::Reader::from_reader(
             b"Name,FileSpec,Storage,VolMin\na,tone.wav,LOADED,70\na,tone.wav,STREAMED,80\n"

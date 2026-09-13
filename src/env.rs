@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Env {
     game_dir: PathBuf,
     tools_dir: PathBuf,
@@ -8,6 +9,10 @@ pub struct Env {
 }
 
 impl Env {
+    pub fn with_output_root(&self, root: &Path) -> Self {
+        Self { platform_working_dir: root.to_path_buf(), ..self.clone() }
+    }
+
     pub fn new(platform_working_dir: &str, source_dir: &str) -> Result<Self, String> {
         let game_dir = env_path("TA_GAME_PATH")?;
         let tools_dir = env_path("TA_TOOLS_PATH")?;
