@@ -78,6 +78,34 @@ python scripts/benchmark.py --reference target/audit/pre-journal/ultrasound.exe 
 Run benchmarks separately from compilation and other test suites. The reference
 path above is a locally retained binary, not a tracked repository file.
 
+## Self-update
+
+Run after building release:
+
+```powershell
+python scripts/test_update.py
+```
+
+It copies the release executable and `libFLAC.dll` into a temporary `sound`
+folder as `snd_convert.exe`, points `LOCALAPPDATA` and `GSCODE_UPDATE_FEED` into
+the sandbox, and serves fake newer releases from `file://` and a local HTTP feed.
+No network, real state folder or game install is used. Bundles are the current
+build with a trailing marker, so swapped files are identifiable and still run.
+
+Cases: the hidden `--update` flag stays out of `--help`; an unreachable feed is
+silent; a second check within a day is skipped; a digest mismatch installs
+nothing and repeats the "is available" line; a DLL held open without delete
+sharing rolls back the already-swapped exe; a piped build reaches EOF while the
+updater is still waiting on a slow feed, after which both files are swapped,
+`.old` copies are cleaned by the next build and the "updated to" line prints
+once; and an update still installs from inside a job that refuses breakaway.
+A kill-on-close job that allows breakaway must not stop the updater; that case
+is skipped when an enclosing job (some CI runners and agent shells) forbids
+breakaway. `target/audit/update.json` records the runs.
+
+Development builds named `ultrasound.exe` never check for updates, so the audit
+and benchmarks are unaffected.
+
 ## Coverage and limits
 
 | Area | Required portable checks | Additional evidence still needed |
