@@ -19,3 +19,6 @@ lewton = "0.10"
 
 [dev-dependencies]
 vorbis_rs = "0.5"
+
+[build-dependencies]
+embed-resource = "3.0.12"
