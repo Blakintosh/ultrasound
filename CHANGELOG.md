@@ -1,22 +1,63 @@
-### Unreleased
+# Changelog
 
-* Added background auto-update. After a successful build, at most once a day, Ultrasound checks for a newer release, verifies its SHA-256 digest and swaps in the new `snd_convert.exe` and `libFLAC.dll` without holding up the build. The next build logs the update, or that a new version is available if it couldn't be installed.
+## 1.0.0
 
-### Version 0.3 (latest)
+Your first build after updating reconverts every sound once, because the default encoding changed (below).
+Builds after that are incremental again.
 
-* Added emitting .sz files used by Linker, as well as ambientgeometry.json files.
+### Changes you'll notice
 
-### Version 0.2
+* Sounds are stored losslessly unless you ask for compression. Before, every sample lost its lowest bit even
+  with no compression level set, as it does with Treyarch's converter. Banks are about 15% larger as a result;
+  set `DefaultAudioCompression` if you need them smaller.
+* Much faster builds when little has changed. On local NTFS drives Ultrasound uses the drive's change journal to
+  tell that a source file is unchanged without reading it again. Set `ULTRASOUND_FULL_HASH` to check every file
+  instead.
+* A failed build leaves your deployed banks and `.sz` files as they were. A bank or `.sz` file whose contents
+  haven't changed is no longer rewritten, so its timestamp stays put.
+* Ultrasound updates itself in the background, at most once a day after a successful build, and installs with
+  `ultrasound-setup.exe`, like the other gscode tools.
+* `snd_convert --version` prints the version.
+* The README and this changelog named the compression setting `DefaultAliasCompression`. It is
+  `DefaultAudioCompression`; the old name never did anything, and a build now warns when it sees it.
+
+### Fixes
+
+* Aliases that differ only in playback or conversion settings are no longer merged into one.
+* Short clips' loudness envelopes use the same units as long clips'.
+* A damaged cached bank is rebuilt instead of failing the build.
+* WAV files: zero block alignment is an error instead of a crash; padded odd-sized chunks, very short clips that
+  need resampling, and data that ends partway through a frame all convert.
+* FileSpecs match `.WAV`, `.Flac` and other capitalisations, and folder FileSpecs work in a game folder whose
+  path has spaces in it.
+* A malformed FLAC file is reported instead of being read out of bounds.
+* Errors name the file, alias or map they're about.
+
+### Known limits
+
+* A FileSpec that names a folder encodes every file in it, but the alias plays only the first.
+
+## 0.3.1
+
+* Fixed blank lines in alias files and stale file targets.
+
+## 0.3.0
+
+* Added emitting the `.sz` files used by the Linker, and `ambientgeometry.json`.
+
+## 0.2.0
 
 * Added FLAC file input support.
 * Added OGG file input support.
-* Added opt-in lossy compression: 
-    * Specify `DefaultAudioCompression`: `none, low, medium, high, extreme` in your map/mod's SZC file (or within an ALIAS entry of the SZC) to use alias compression for the project/alias file. 
+* Added opt-in lossy compression:
+    * Specify `DefaultAudioCompression`: `none, low, medium, high, extreme` in your map/mod's SZC file (or within
+      an ALIAS entry of the SZC) to use alias compression for the project/alias file.
     * You can also use `CompressionLevel` column within an alias file to do this for an individual alias.
-    * In testing as a % to baseline, the compression levels approximately mapped to: Low - 74%, Medium - 52%, High - 36%, Extreme - 24%. Your mileage may vary.
+    * In testing as a % to baseline, the compression levels approximately mapped to: Low - 74%, Medium - 52%,
+      High - 36%, Extreme - 24%. Your mileage may vary.
 * Fixed a bug with how Ultrasound computed invalidation, which meant some alias changes were not picked up.
 * Fixed a bug with how the loudness of sounds were calculated, which is used during processing.
 
-### Version 0.1
+## 0.1.0
 
 * Initial release.

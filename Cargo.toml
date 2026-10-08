@@ -1,7 +1,10 @@
 [package]
 name = "ultrasound"
-version = "0.3.1"
+version = "1.0.0"
 edition = "2024"
+description = "A faster, fixed drop-in replacement for the Black Ops III Mod Tools' snd_convert"
+license = "MIT"
+repository = "https://github.com/Blakintosh/ultrasound"
 
 [features]
 flac_hifi = []
