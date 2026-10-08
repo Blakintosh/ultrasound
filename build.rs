@@ -31,7 +31,11 @@ fn main() {
             .map(|p| p.parse().unwrap_or(0))
             .collect();
         parts.resize(4, 0);
-        let numeric = parts.iter().map(u16::to_string).collect::<Vec<_>>().join(",");
+        let numeric = parts
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
         let icon = Path::new(manifest_dir).join("assets/ultrasound.ico");
         let rc = Path::new(&out_dir).join("ultrasound.rc");
         fs::write(
