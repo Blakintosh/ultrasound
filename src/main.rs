@@ -38,13 +38,16 @@ use update_bank::update_bank;
 
 const RAW_ARG_USAGE: &str = "Expected raw args: <platform> <platform_working_dir> <unused> <action> <source_dir> [action args...]";
 
+/// Ultrasound: the Black Ops III Mod Tools' sound converter, rebuilt. The Mod Tools run it as
+/// `sound/snd_convert.exe`; it isn't usually run by hand.
 #[derive(Parser)]
+#[command(name = "Ultrasound", version)]
 struct Args {
-    /// Enable detailed output
+    /// Accepted for compatibility with the Mod Tools; has no effect
     #[arg(long)]
     verbose: bool,
 
-    /// Skip dependency checking
+    /// Accepted for compatibility with the Mod Tools; has no effect
     #[arg(long)]
     skip_deps: bool,
 
