@@ -133,7 +133,8 @@ neither replaces an engine test.
 Absolute temporary paths are replaced with `<GAME>`. Asset-list ordering is
 normalized because incremental and clean builds may pack assets in different
 orders. Names, metadata, payloads and other sidecar contents remain compared.
-The updated reference requires lossless encoding when no lossy level is selected.
+With no lossy level selected, the reference drops only each sample's lowest bit, as Treyarch's converter
+does; the FLAC encoder itself is lossless.
 The original snapshot remains available in commit `96026a6`. The snapshot changes
 were limited to recipe checksums, encoded payloads and their memory totals; alias
 contents and the existing long-clip metadata remained unchanged.
@@ -183,7 +184,7 @@ limitation still reproduces; it does not count it as a feature acceptance pass.
 | B005 | Fixed | Only fully identical alias rows are deduplicated |
 | B006 | Fixed | Corrupt empty/populated caches rebuild assets and header identity |
 | B007 | Open | Folder enumeration encodes two assets but references only the first |
-| B008 | Fixed | The default encoder preserves every input sample bit |
+| B008 | Superseded | The FLAC encoder preserves every bit it is given; the default level then drops only the lowest bit, as Treyarch's converter does |
 | B009 | Fixed for handled failures | Failed conversion publishes no changed files; publication errors roll back |
 
 The conversion fingerprint includes an algorithm revision and encoder effort.

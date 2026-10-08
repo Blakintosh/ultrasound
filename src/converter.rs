@@ -46,10 +46,11 @@ pub enum CompressionLevel {
 
 impl CompressionLevel {
     /// Mask AND-ed with each i16 sample to discard low-order bits. `None`
-    /// leaves the sample untouched.
+    /// drops only the lowest bit (about -96 dB), as Treyarch's converter does:
+    /// inaudible, and it keeps banks about 15% smaller than lossless.
     pub fn truncate_mask(self) -> i16 {
         match self {
-            CompressionLevel::None => !0x0000,
+            CompressionLevel::None => !0x0001,    // 15-bit
             CompressionLevel::Low => !0x0003,     // 14-bit
             CompressionLevel::Medium => !0x000F,  // 12-bit
             CompressionLevel::High => !0x003F,    // 10-bit
@@ -328,6 +329,15 @@ fn silence_gate(pcm: &mut [i16], channels: usize, window_frames: usize, threshol
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_level_drops_only_the_lowest_bit() {
+        let mask = CompressionLevel::default().truncate_mask();
+        assert_eq!([1001i16 & mask, -1001 & mask, 1000 & mask], [1000, -1002, 1000]);
+        for level in [CompressionLevel::Low, CompressionLevel::Medium, CompressionLevel::High, CompressionLevel::Extreme] {
+            assert_eq!(level.truncate_mask() & 1, 0, "{level:?} must drop at least what the default drops");
+        }
+    }
 
     #[test]
     fn recipe_fingerprint_encodes_gate_window() {
