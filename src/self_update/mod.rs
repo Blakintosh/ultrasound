@@ -10,6 +10,7 @@ mod install;
 mod release;
 mod state;
 
+use install::Failure;
 use release::{Version, bundle_name, parse_release};
 use sha2::{Digest, Sha256};
 use state::{Notice, State};
@@ -21,8 +22,8 @@ const LATEST_URL: &str = "https://api.github.com/repos/Blakintosh/ultrasound/rel
 const FEED_OVERRIDE: &str = "GSCODE_UPDATE_FEED";
 const UPDATE_FLAG: &str = "--update";
 
-/// An installed copy: `snd_convert.exe` in the game's `sound` folder. Other names (a development
-/// build in `target/`) never update themselves.
+/// An installed copy: `snd_convert.exe` in a Black Ops III `sound` folder, beside `BlackOps3.exe` or
+/// the Mod Tools' `share` folder. Any other copy (a development build in `target/`) never updates.
 struct Install {
     exe: PathBuf,
     dir: PathBuf,
@@ -37,6 +38,12 @@ impl Install {
             return None;
         }
         let dir = exe.parent()?.to_path_buf();
+        let root = dir.parent()?;
+        let in_game = dir.file_name()?.eq_ignore_ascii_case("sound")
+            && (root.join("BlackOps3.exe").is_file() || root.join("share").is_dir());
+        if !in_game {
+            return None;
+        }
         let local = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty())?;
         let key = dir.to_string_lossy().to_lowercase();
         let id: String = Sha256::digest(key.as_bytes())[..8].iter().map(|b| format!("{b:02x}")).collect();
@@ -67,10 +74,8 @@ fn now() -> u64 {
 
 /// On every start: remove files left by the last swap and report its outcome.
 pub fn on_start() {
-    if let Some(dir) = std::env::current_exe().ok().as_deref().and_then(Path::parent) {
-        install::remove_leftovers(dir);
-    }
     let Some(install) = Install::locate() else { return };
+    install::remove_leftovers(&install.dir);
     let mut state = install.load();
     let (line, changed) = state.take_notice(Version::current());
     if let Some(line) = line {
@@ -100,7 +105,7 @@ enum Outcome {
     UpToDate,
     Installed { version: Version, url: String },
     /// A newer release exists but could not be installed here.
-    Unavailable { version: Version, url: String, reason: String },
+    Unavailable { version: Version, url: String, installer: Option<String>, failure: Failure },
 }
 
 /// The `--update` process. Writes nothing to stdout/stderr; the outcome goes to the state file.
@@ -137,9 +142,14 @@ pub fn run_update() {
                 url,
             });
         }
-        Outcome::Unavailable { version, url, reason } => {
-            state.last_result = Some(format!("{version} not installed: {reason}"));
-            state.notice = Some(Notice::Available { version: version.to_string(), url });
+        Outcome::Unavailable { version, url, installer, failure } => {
+            state.last_result = Some(format!("{version} not installed: {}", failure.detail));
+            state.notice = Some(Notice::Available {
+                version: version.to_string(),
+                url,
+                reason: Some(failure.message),
+                installer,
+            });
         }
     }
     install.save(&state);
@@ -173,16 +183,24 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
     if release.version <= Version::current() {
         return Outcome::UpToDate;
     }
-    let unavailable = |reason: String| Outcome::Unavailable {
+    let unavailable = |failure: Failure| Outcome::Unavailable {
         version: release.version,
         url: release.url.clone(),
-        reason,
+        installer: release.installer.clone(),
+        failure,
     };
+    let name = bundle_name(release.version);
     let Some(bundle) = &release.bundle else {
-        return unavailable(format!("no {} asset", bundle_name(release.version)));
+        return unavailable(Failure::new(
+            format!("Release {} has no {name} to install.", release.version),
+            format!("no {name} asset"),
+        ));
     };
     let Some(expected) = bundle.sha256 else {
-        return unavailable("bundle has no sha256 digest".into());
+        return unavailable(Failure::new(
+            format!("{name} has no checksum, so it can't be installed."),
+            "bundle has no sha256 digest",
+        ));
     };
     let zip = work.join(&bundle.name);
     if let Err(e) = install::download(&bundle.url, &zip, protocols, 300, false) {
@@ -190,8 +208,15 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
     }
     match install::sha256_file(&zip) {
         Ok(actual) if actual == expected => {}
-        Ok(_) => return unavailable("bundle digest mismatch".into()),
-        Err(e) => return unavailable(format!("cannot read bundle: {e}")),
+        Ok(_) => {
+            return unavailable(Failure::new(
+                "The download didn't match its checksum, so it wasn't kept.",
+                "bundle digest mismatch",
+            ));
+        }
+        Err(e) => {
+            return unavailable(Failure::new("The download couldn't be read.", format!("cannot read bundle: {e}")));
+        }
     }
     let staged = match install::extract(&zip, &work.join("bundle")) {
         Ok(staged) => staged,

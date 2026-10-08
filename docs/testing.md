@@ -92,13 +92,15 @@ the sandbox, and serves fake newer releases from `file://` and a local HTTP feed
 No network, real state folder or game install is used. Bundles are the current
 build with a trailing marker, so swapped files are identifiable and still run.
 
-Cases: the hidden `--update` flag stays out of `--help`; an unreachable feed is
-silent; a second check within a day is skipped; a digest mismatch installs
-nothing and repeats the "is available" line; a DLL held open without delete
-sharing rolls back the already-swapped exe; a piped build reaches EOF while the
-updater is still waiting on a slow feed, after which both files are swapped,
-`.old` copies are cleaned by the next build and the "updated to" line prints
-once; and an update still installs from inside a job that refuses breakaway.
+Cases: the hidden `--update` flag stays out of `--help`; `--version` prints
+`Ultrasound X.Y.Z`; a copy whose `sound` folder has neither `BlackOps3.exe` nor
+`share` beside it never checks; an unreachable feed is silent; a second check
+within a day is skipped; a digest mismatch installs nothing and repeats the
+"Couldn't install" line with its reason and the installer link; a DLL held open
+without delete sharing rolls back the already-swapped exe; a piped build reaches
+EOF while the updater is still waiting on a slow feed, after which both files are
+swapped, `.old` copies are cleaned by the next build and the "is installed" line
+prints once; and an update still installs from inside a job that refuses breakaway.
 A kill-on-close job that allows breakaway must not stop the updater; that case
 is skipped when an enclosing job (some CI runners and agent shells) forbids
 breakaway. `target/audit/update.json` records the runs.

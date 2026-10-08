@@ -10,6 +10,7 @@ from ctypes import wintypes
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -20,6 +21,10 @@ import zipfile
 from audit import Project, digest, require
 
 FILES = ("snd_convert.exe", "libFLAC.dll")
+VERSION = re.search(r'^version = "([^"]+)"', Path(__file__).resolve().parents[1].joinpath("Cargo.toml").read_text(),
+                    re.MULTILINE)[1]
+RELEASE_PAGE = "https://example.invalid/ultrasound/releases/tag/v9.9.9"
+INSTALLER = "https://example.invalid/ultrasound/releases/download/v9.9.9/ultrasound-setup.exe"
 
 
 class SlowFeed:
@@ -91,7 +96,8 @@ class Sandbox:
             "html_url": f"https://example.invalid/ultrasound/releases/tag/v{version}",
             "draft": False, "prerelease": False, "body": "test",
             "assets": [{"name": zip_path.name, "browser_download_url": zip_path.as_uri(),
-                        "digest": digest_value or "sha256:" + digest(zip_path.read_bytes())}],
+                        "digest": digest_value or "sha256:" + digest(zip_path.read_bytes())},
+                       {"name": "ultrasound-setup.exe", "browser_download_url": INSTALLER, "digest": None}],
         }).encode()
 
     def file_feed(self, body):
@@ -136,7 +142,8 @@ class Sandbox:
         return self.project.run(label, languages=("all",))
 
     def notices(self, result):
-        return [line for line in result.stdout.splitlines() if line.startswith("Ultrasound ")]
+        return [line for line in result.stdout.splitlines()
+                if line.startswith(("Ultrasound ", "Couldn't install Ultrasound "))]
 
     def files(self):
         return {p.name: p.read_bytes() for p in sorted(self.sound.iterdir())}
@@ -207,6 +214,24 @@ def main():
             require("--update" not in help_text and "--verbose" in help_text, "--update must stay out of --help")
             case("--update hidden from help")
 
+            version_text = subprocess.run([str(box.sound / "snd_convert.exe"), "--version"],
+                                          capture_output=True, text=True, timeout=30).stdout.strip()
+            require(version_text == f"Ultrasound {VERSION}", f"--version: {version_text!r}")
+            case("--version names the product", line=version_text)
+
+            # A copy outside a Black Ops III folder (no BlackOps3.exe or share beside its sound folder)
+            # never checks, even with a newer release published.
+            loose = box.root / "elsewhere/sound"
+            loose.mkdir(parents=True)
+            for name in FILES:
+                (loose / name).write_bytes(box.original[name])
+            box.file_feed(box.release("9.9.9", b"LOOSE"))
+            Project(box.root / "game", loose / "snd_convert.exe", box.runs).run("loose copy: build", languages=("all",))
+            time.sleep(3)
+            require(box.state_path() is None, "a copy outside Black Ops III recorded update state")
+            require(sorted(p.name for p in loose.iterdir()) == sorted(FILES), "a loose copy changed its files")
+            case("a copy outside Black Ops III never updates")
+
             # Offline: nothing listening; the check fails quietly and is recorded only in state.
             os.environ["GSCODE_UPDATE_FEED"] = "http://127.0.0.1:9/latest.json"
             first = box.run("offline: build")
@@ -234,11 +259,12 @@ def main():
             state = box.wait_result()
             require("digest mismatch" in state["last_result"], f"mismatch: {state}")
             box.require_untouched("mismatch")
-            available = "Ultrasound 9.9.9 is available: https://example.invalid/ultrasound/releases/tag/v9.9.9"
+            mismatch = ("Couldn't install Ultrasound 9.9.9. The download didn't match its checksum, so it wasn't kept. "
+                        f"Download the installer: {INSTALLER}")
             for attempt in (1, 2):
                 notices = box.notices(box.run(f"mismatch: next build {attempt}"))
-                require(notices == [available], f"mismatch run {attempt}: {notices}")
-            case("digest mismatch leaves files and repeats the notice", line=available)
+                require(notices == [mismatch], f"mismatch run {attempt}: {notices}")
+            case("digest mismatch leaves files and repeats the notice", line=mismatch)
 
             # Locked file: the DLL cannot be renamed, so the exe already swapped in is rolled back.
             box.file_feed(box.release("9.9.9", b"LOCKED"))
@@ -248,8 +274,10 @@ def main():
                 state = box.wait_result()
             require("previous files restored" in state["last_result"], f"locked: {state}")
             box.require_untouched("locked")
+            locked = ("Couldn't install Ultrasound 9.9.9. A file was in use or couldn't be replaced. "
+                      f"Nothing was changed. Download the installer: {INSTALLER}")
             notices = box.notices(box.run("locked: next build"))
-            require(notices == [available], f"locked: {notices}")
+            require(notices == [locked], f"locked: {notices}")
             case("locked file rolls back and announces", result=state["last_result"])
 
             # Success, with the linker's view: stdout/stderr through pipes reach EOF while the updater
@@ -278,7 +306,7 @@ def main():
             require(sorted(files) == sorted([*FILES, *(f + ".old" for f in FILES)]), f"stray files: {sorted(files)}")
             case("piped run reaches EOF while the update runs", eof_seconds=round(eof, 3))
 
-            updated = "Ultrasound updated to 9.9.9 (was 0.3.1): https://example.invalid/ultrasound/releases/tag/v9.9.9"
+            updated = f"Ultrasound 9.9.9 is installed. You had {VERSION}. Release notes: {RELEASE_PAGE}"
             notices = box.notices(box.run("installed: next build"))
             require(notices == [updated], f"updated notice: {notices}")
             require(sorted(box.files()) == sorted(FILES), f".old files not cleaned: {sorted(box.files())}")

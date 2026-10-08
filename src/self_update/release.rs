@@ -47,6 +47,8 @@ pub struct Release {
     pub version: Version,
     pub url: String,
     pub bundle: Option<Bundle>,
+    /// The download URL of `ultrasound-setup.exe`, when the release has one.
+    pub installer: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +82,8 @@ pub fn bundle_name(version: Version) -> String {
     format!("ultrasound-{version}-win-x64.zip")
 }
 
+const INSTALLER_NAME: &str = "ultrasound-setup.exe";
+
 /// Parses a `releases/latest` response. Drafts, pre-releases and non-`X.Y.Z` tags are rejected.
 pub fn parse_release(json: &str) -> Result<Release, String> {
     let api: ApiRelease = serde_json::from_str(json).map_err(|e| format!("invalid release JSON: {e}"))?;
@@ -88,6 +92,7 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
     }
     let version = Version::parse(&api.tag_name).ok_or_else(|| format!("unsupported tag '{}'", api.tag_name))?;
     let name = bundle_name(version);
+    let installer = api.assets.iter().find(|a| a.name == INSTALLER_NAME).map(|a| a.browser_download_url.clone());
     let bundle = api.assets.into_iter().find(|a| a.name == name).map(|a| Bundle {
         sha256: a.digest.as_deref().and_then(parse_digest),
         name: a.name,
@@ -97,7 +102,7 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
         .html_url
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| format!("{RELEASES_URL}v{version}"));
-    Ok(Release { version, url, bundle })
+    Ok(Release { version, url, bundle, installer })
 }
 
 /// Parses an asset digest of the form `sha256:<64 hex digits>`.
@@ -164,6 +169,7 @@ mod tests {
         assert_eq!(bundle.name, "ultrasound-0.3.2-win-x64.zip");
         assert_eq!(bundle.url, "https://x/zip");
         assert_eq!(bundle.sha256, Some([0xab; 32]));
+        assert_eq!(release.installer.as_deref(), Some("https://x/setup"));
     }
 
     #[test]
@@ -172,6 +178,7 @@ mod tests {
         let old = r#"{"tag_name":"v0.3.1","assets":[{"name":"Ultrasound.v0.3.1.zip","browser_download_url":"u","digest":"sha256:00"}]}"#;
         let release = parse_release(old).unwrap();
         assert_eq!(release.bundle, None);
+        assert_eq!(release.installer, None);
         assert_eq!(release.url, "https://github.com/Blakintosh/ultrasound/releases/tag/v0.3.1");
 
         let no_digest = r#"{"tag_name":"v1.0.0","assets":[{"name":"ultrasound-1.0.0-win-x64.zip","browser_download_url":"u"}]}"#;

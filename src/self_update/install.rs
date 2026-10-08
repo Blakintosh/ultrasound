@@ -10,6 +10,22 @@ use std::time::{Duration, Instant};
 /// The bundle's files, all under `sound/`, each installed under its own name beside the exe.
 pub const FILES: [&str; 2] = ["snd_convert.exe", "libFLAC.dll"];
 
+/// Why an update couldn't be installed: a sentence for the build log, worded as the other gscode apps
+/// word it, and the detail recorded in the state file.
+#[derive(Debug)]
+pub struct Failure {
+    pub message: String,
+    pub detail: String,
+}
+
+impl Failure {
+    pub fn new(message: impl Into<String>, detail: impl Into<String>) -> Self {
+        Failure { message: message.into(), detail: detail.into() }
+    }
+}
+
+const NOTHING_CHANGED_IN_USE: &str = "A file was in use or couldn't be replaced. Nothing was changed.";
+
 fn sibling(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(suffix);
@@ -91,11 +107,12 @@ pub fn sha256_file(path: &Path) -> std::io::Result<[u8; 32]> {
 
 /// Extracts the bundle with Windows' own tar.exe (bsdtar, which reads zip and refuses absolute
 /// and `..` paths) and returns the staged path of each of [`FILES`].
-pub fn extract(zip: &Path, into: &Path) -> Result<Vec<PathBuf>, String> {
-    fs::create_dir_all(into).map_err(|e| format!("extract: {e}"))?;
+pub fn extract(zip: &Path, into: &Path) -> Result<Vec<PathBuf>, Failure> {
+    const UNREADABLE: &str = "The download isn't a readable zip.";
+    fs::create_dir_all(into).map_err(|e| Failure::new(UNREADABLE, format!("extract: {e}")))?;
     let mut command = Command::new(system_tool("tar.exe"));
     command.arg("-x").arg("-f").arg(zip).arg("-C").arg(into);
-    run_tool(&mut command, Duration::from_secs(60))?;
+    run_tool(&mut command, Duration::from_secs(60)).map_err(|e| Failure::new(UNREADABLE, e))?;
     FILES
         .iter()
         .map(|file| {
@@ -103,7 +120,10 @@ pub fn extract(zip: &Path, into: &Path) -> Result<Vec<PathBuf>, String> {
             if path.is_file() {
                 Ok(path)
             } else {
-                Err(format!("bundle has no sound/{file}"))
+                Err(Failure::new(
+                    format!("The download doesn't contain sound/{file}."),
+                    format!("bundle has no sound/{file}"),
+                ))
             }
         })
         .collect()
@@ -116,7 +136,7 @@ enum Step {
 
 /// Swaps each staged file in beside the running exe: delete `<file>.old`, rename the current file
 /// to `<file>.old`, move the new one in. Any failure puts every file back.
-pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), String> {
+pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), Failure> {
     let targets: Vec<PathBuf> = FILES.iter().map(|f| dir.join(f)).collect();
     let news: Vec<PathBuf> = targets.iter().map(|t| sibling(t, ".new")).collect();
     let clean_news = || {
@@ -130,7 +150,12 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), String> {
     for (source, new) in staged.iter().zip(&news) {
         if let Err(e) = fs::copy(source, new) {
             clean_news();
-            return Err(format!("cannot write {}: {e}", new.display()));
+            let message = if e.kind() == std::io::ErrorKind::PermissionDenied {
+                "Ultrasound can't write to its folder in Black Ops III. Nothing was changed."
+            } else {
+                NOTHING_CHANGED_IN_USE
+            };
+            return Err(Failure::new(message, format!("cannot write {}: {e}", new.display())));
         }
     }
     for target in &targets {
@@ -139,7 +164,7 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), String> {
             && e.kind() != std::io::ErrorKind::NotFound
         {
             clean_news();
-            return Err(format!("cannot remove {}: {e}", old.display()));
+            return Err(Failure::new(NOTHING_CHANGED_IN_USE, format!("cannot remove {}: {e}", old.display())));
         }
     }
 
@@ -176,9 +201,12 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), String> {
     }
     clean_news();
     if unrestored.is_empty() {
-        Err(format!("{failure}; previous files restored"))
+        Err(Failure::new(NOTHING_CHANGED_IN_USE, format!("{failure}; previous files restored")))
     } else {
-        Err(format!("{failure}; could not restore {}", unrestored.join(", ")))
+        Err(Failure::new(
+            "Some files couldn't be put back. Reinstall Ultrasound from the release page.",
+            format!("{failure}; could not restore {}", unrestored.join(", ")),
+        ))
     }
 }
 
@@ -246,7 +274,8 @@ mod tests {
             .open(dir.join("libFLAC.dll"))
             .unwrap();
         let error = swap(&dir, &staged).unwrap_err();
-        assert!(error.contains("previous files restored"), "{error}");
+        assert!(error.detail.contains("previous files restored"), "{error:?}");
+        assert_eq!(error.message, NOTHING_CHANGED_IN_USE);
         drop(locked);
         assert_eq!(contents(&dir), before);
         fs::remove_dir_all(dir.parent().unwrap()).unwrap();
@@ -257,7 +286,7 @@ mod tests {
         let (dir, mut staged) = fixture("missing");
         let before = contents(&dir);
         staged[1] = staged[1].with_file_name("absent.dll");
-        assert!(swap(&dir, &staged).unwrap_err().starts_with("cannot write"));
+        assert!(swap(&dir, &staged).unwrap_err().detail.starts_with("cannot write"));
         assert_eq!(contents(&dir), before);
         fs::remove_dir_all(dir.parent().unwrap()).unwrap();
     }

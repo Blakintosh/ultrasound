@@ -26,7 +26,17 @@ pub struct State {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Notice {
     Updated { version: String, previous: String, url: String },
-    Available { version: String, url: String },
+    /// A newer release that couldn't be installed here.
+    Available {
+        version: String,
+        url: String,
+        /// Why, as a sentence for the build log.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+        /// The release's `ultrasound-setup.exe`, offered in place of the release page.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        installer: Option<String>,
+    },
 }
 
 impl State {
@@ -57,11 +67,16 @@ impl State {
             None => (None, false),
             Some(Notice::Updated { version, previous, url }) => {
                 self.notice = None;
-                (Some(format!("Ultrasound updated to {version} (was {previous}): {url}")), true)
+                (Some(format!("Ultrasound {version} is installed. You had {previous}. Release notes: {url}")), true)
             }
-            Some(Notice::Available { version, url }) => {
+            Some(Notice::Available { version, url, reason, installer }) => {
                 if Version::parse(&version).is_some_and(|v| v > current) {
-                    (Some(format!("Ultrasound {version} is available: {url}")), false)
+                    let reason = reason.map(|r| format!(" {r}")).unwrap_or_default();
+                    let link = match installer {
+                        Some(installer) => format!("Download the installer: {installer}"),
+                        None => format!("Open the release page: {url}"),
+                    };
+                    (Some(format!("Couldn't install Ultrasound {version}.{reason} {link}")), false)
                 } else {
                     self.notice = None;
                     (None, true)
@@ -103,11 +118,23 @@ mod tests {
         assert!(!dir.join("state.json.tmp").exists());
 
         let available = State {
-            notice: Some(Notice::Available { version: "1.0.0".into(), url: "u".into() }),
+            notice: Some(Notice::Available {
+                version: "1.0.0".into(),
+                url: "u".into(),
+                reason: Some("r".into()),
+                installer: Some("i".into()),
+            }),
             ..State::default()
         };
         available.save(&path).unwrap();
         assert_eq!(State::load(&path), available);
+
+        // Written before the reason and installer were recorded.
+        fs::write(&path, r#"{"notice":{"kind":"available","version":"1.0.0","url":"u"}}"#).unwrap();
+        assert_eq!(
+            State::load(&path).notice,
+            Some(Notice::Available { version: "1.0.0".into(), url: "u".into(), reason: None, installer: None })
+        );
 
         fs::write(&path, "{not json").unwrap();
         assert_eq!(State::load(&path), State::default());
@@ -135,14 +162,26 @@ mod tests {
         };
         assert_eq!(
             state.take_notice(current),
-            (Some("Ultrasound updated to 0.3.1 (was 0.3.0): u".into()), true)
+            (Some("Ultrasound 0.3.1 is installed. You had 0.3.0. Release notes: u".into()), true)
         );
         assert_eq!(state.take_notice(current), (None, false));
 
-        state.notice = Some(Notice::Available { version: "0.3.2".into(), url: "u".into() });
+        state.notice = Some(Notice::Available {
+            version: "0.3.2".into(),
+            url: "u".into(),
+            reason: Some("The download didn't match its checksum, so it wasn't kept.".into()),
+            installer: Some("i".into()),
+        });
+        let line = "Couldn't install Ultrasound 0.3.2. The download didn't match its checksum, so it wasn't kept. \
+                    Download the installer: i";
         for _ in 0..2 {
-            assert_eq!(state.take_notice(current), (Some("Ultrasound 0.3.2 is available: u".into()), false));
+            assert_eq!(state.take_notice(current), (Some(line.into()), false));
         }
+        state.notice = Some(Notice::Available { version: "0.3.2".into(), url: "u".into(), reason: None, installer: None });
+        assert_eq!(
+            state.take_notice(current),
+            (Some("Couldn't install Ultrasound 0.3.2. Open the release page: u".into()), false)
+        );
         let newer = Version::parse("0.3.2").unwrap();
         assert_eq!(state.take_notice(newer), (None, true));
         assert_eq!(state.notice, None);
