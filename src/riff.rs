@@ -55,18 +55,18 @@ impl Riff {
         }
 
         // Check the RIFF header.
-        if read_u32(&mut reader)? != 1179011410u32 {
+        if read_u32(&mut reader, file_name)? != 1179011410u32 {
             return Err(format!(
                 "File {} does not start with RIFF header.",
                 file_name
             ));
         }
         // Now make sure the size is OK.
-        if read_u32(&mut reader)? as u64 != (length - 8) {
+        if read_u32(&mut reader, file_name)? as u64 != (length - 8) {
             return Err(format!("File {} has incorrect RIFF chunk size.", file_name));
         }
         // Now check the WAVE header.
-        if read_u32(&mut reader)? != 1163280727u32 {
+        if read_u32(&mut reader, file_name)? != 1163280727u32 {
             return Err(format!("File {} does not contain WAVE header.", file_name));
         }
         // Seek out the "fmt " chunk.
@@ -76,13 +76,13 @@ impl Riff {
             if pos >= length {
                 return Err(format!("File {} does not contain fmt chunk.", file_name));
             }
-            let chunk_id = read_u32(&mut reader)?;
+            let chunk_id = read_u32(&mut reader, file_name)?;
 
             // We found our guy.
             if chunk_id == FOURCC_FMT {
                 break;
             }
-            let chunk_size = read_u32(&mut reader)?;
+            let chunk_size = read_u32(&mut reader, file_name)?;
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
@@ -91,7 +91,7 @@ impl Riff {
         }
 
         // We're at the fmt chunk, find the length of the chunk and make sure its length fits.
-        let fmt_chunk_size = read_u32(&mut reader)? as u64;
+        let fmt_chunk_size = read_u32(&mut reader, file_name)? as u64;
         let fmt_data_start = reader.stream_position().map_err(|e| {
             format!(
                 "Failed to get current position in file {}: {}",
@@ -103,12 +103,12 @@ impl Riff {
         }
 
         // Grab the format properties.
-        let format = read_u16(&mut reader)?;
-        let channel_count = read_u16(&mut reader)?;
-        let frame_rate = read_u32(&mut reader)?;
-        let _byte_rate = read_u32(&mut reader)?;
-        let frame_size = read_u16(&mut reader)?;
-        let _bits_per_sample = read_u16(&mut reader)?;
+        let format = read_u16(&mut reader, file_name)?;
+        let channel_count = read_u16(&mut reader, file_name)?;
+        let frame_rate = read_u32(&mut reader, file_name)?;
+        let _byte_rate = read_u32(&mut reader, file_name)?;
+        let frame_size = read_u16(&mut reader, file_name)?;
+        let _bits_per_sample = read_u16(&mut reader, file_name)?;
         if channel_count == 0 || frame_size == 0 || frame_rate == 0
             || frame_size % channel_count != 0
         {
@@ -127,13 +127,13 @@ impl Riff {
             if pos >= length {
                 return Err(format!("File {} does not contain data chunk.", file_name));
             }
-            let chunk_id = read_u32(&mut reader)?;
+            let chunk_id = read_u32(&mut reader, file_name)?;
 
             // We found our guy.
             if chunk_id == FOURCC_DATA {
                 break;
             }
-            let chunk_size = read_u32(&mut reader)?;
+            let chunk_size = read_u32(&mut reader, file_name)?;
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
@@ -142,7 +142,7 @@ impl Riff {
         }
 
         // At data section, grab its size and offset.
-        let data_chunk_size = read_u32(&mut reader)? as u64;
+        let data_chunk_size = read_u32(&mut reader, file_name)? as u64;
         let data_byte_offset = reader.stream_position().map_err(|e| {
             format!(
                 "Failed to get current position in file {}: {}",
@@ -178,9 +178,9 @@ impl Riff {
         // bytes than actually follow the `data` FourCC). Read whatever bytes
         // are present and zero-pad the rest out to the declared length so
         // the tail becomes silence instead of a hard error.
-        let available_end = declared_end.min(data.len());
-        let declared_len = declared_end - start;
-        let sample_count = declared_len / 2;
+        // Only whole frames are decoded: a trailing partial frame is dropped, as `frame_count` drops it.
+        let sample_count = self.frame_count as usize * self.channel_count as usize;
+        let available_end = declared_end.min(data.len()).min(start + sample_count * 2);
         let mut out = Vec::with_capacity(sample_count);
         let bytes = &data[start..available_end];
         for c in bytes.chunks_exact(2) {
@@ -343,19 +343,19 @@ impl Riff {
     }
 }
 
-fn read_u32(reader: &mut impl Read) -> Result<u32, String> {
+fn read_u32(reader: &mut impl Read, file_name: &str) -> Result<u32, String> {
     let mut buffer = [0u8; 4];
     reader
         .read_exact(&mut buffer)
-        .map_err(|e| format!("Failed to read u32: {}", e))?;
+        .map_err(|e| format!("File {} has a truncated header: {}", file_name, e))?;
     Ok(u32::from_le_bytes(buffer))
 }
 
-fn read_u16(reader: &mut impl Read) -> Result<u16, String> {
+fn read_u16(reader: &mut impl Read, file_name: &str) -> Result<u16, String> {
     let mut buffer = [0u8; 2];
     reader
         .read_exact(&mut buffer)
-        .map_err(|e| format!("Failed to read u16: {}", e))?;
+        .map_err(|e| format!("File {} has a truncated header: {}", file_name, e))?;
     Ok(u16::from_le_bytes(buffer))
 }
 

@@ -40,6 +40,35 @@ fn synthetic_pcm_wav_decodes_exactly() {
 }
 
 #[test]
+fn stereo_data_with_a_partial_frame_decodes_whole_frames() {
+    let mut bytes = wav(4, false);
+    bytes[22..24].copy_from_slice(&2u16.to_le_bytes());
+    let data_size = bytes.len() - 8;
+    bytes[data_size..data_size + 4].copy_from_slice(&6u32.to_le_bytes());
+    bytes.extend(7i16.to_le_bytes());
+    let size = bytes.len() as u32 - 8;
+    bytes[4..8].copy_from_slice(&size.to_le_bytes());
+
+    let riff = Riff::parse("partial.wav", &bytes).unwrap();
+    assert_eq!(riff.frame_count, 1);
+    assert_eq!(
+        riff.decode_interleaved_s16_from_slice(&bytes).unwrap(),
+        [100, -100]
+    );
+}
+
+#[test]
+fn truncated_wav_header_names_the_file() {
+    let mut bytes = wav(2, false)[..30].to_vec();
+    let size = bytes.len() as u32 - 8;
+    bytes[4..8].copy_from_slice(&size.to_le_bytes());
+    let Err(err) = Riff::parse("cut.wav", &bytes) else {
+        panic!("a truncated header parsed")
+    };
+    assert!(err.contains("cut.wav"), "{err}");
+}
+
+#[test]
 fn invalid_wav_dimensions_and_fmt_lengths_return_errors() {
     for (offset, replacement) in [
         (22, 0u16.to_le_bytes().to_vec()),
