@@ -107,7 +107,7 @@ impl CompressionLevel {
             threshold[1],
             // Revision 2 also removes the encoder's implicit lossy sample mask.
             2, 0, 0, 0,
-            if cfg!(feature = "flac_hifi") { 5 } else { 8 },
+            crate::flac::ENCODER_EFFORT as u8,
         ]
     }
 }

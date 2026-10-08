@@ -247,6 +247,15 @@ extern "C" fn dec_write_callback(
     unsafe {
         let state = &mut *(client_data as *mut DecodeState);
         let header = &(*frame).header;
+        // `buffer` holds one array per channel of this frame. A frame that disagrees with STREAMINFO
+        // would make the loop below read arrays that don't exist.
+        if header.channels != state.channels || header.bits_per_sample != state.bits_per_sample {
+            state.error = Some(format!(
+                "frame has {} channels at {} bits, but the stream declares {} at {}",
+                header.channels, header.bits_per_sample, state.channels, state.bits_per_sample
+            ));
+            return 1; // FLAC__STREAM_DECODER_WRITE_STATUS_ABORT
+        }
         let blocksize = header.blocksize as usize;
         let channels = state.channels as usize;
 
@@ -278,6 +287,10 @@ extern "C" fn dec_error_callback(_decoder: *mut c_void, status: i32, client_data
         }
     }
 }
+
+/// libFLAC's compression level. It changes the encoded bytes, so it is part of every cached asset's
+/// conversion fingerprint.
+pub const ENCODER_EFFORT: u32 = if cfg!(feature = "flac_hifi") { 5 } else { 8 };
 
 pub fn encode(
     source_name: &str,
@@ -312,9 +325,7 @@ fn encode_in_chunks(
             return Err(format!("Failed to create FLAC encoder for {}", source_name));
         }
 
-        let compression_level = if cfg!(feature = "flac_hifi") { 5 } else { 8 };
-
-        FLAC__stream_encoder_set_compression_level(encoder.ptr, compression_level);
+        FLAC__stream_encoder_set_compression_level(encoder.ptr, ENCODER_EFFORT);
         FLAC__stream_encoder_set_bits_per_sample(encoder.ptr, 16);
 
         FLAC__stream_encoder_set_channels(encoder.ptr, channel_count as u32);
@@ -337,7 +348,8 @@ fn encode_in_chunks(
 
         if init_result != 0 {
             return Err(format!(
-                "Failed to initialize FLAC encoder: error code {}",
+                "Failed to initialize FLAC encoder for {}: error code {}",
+                source_name,
                 init_result
             ));
         }
@@ -350,12 +362,12 @@ fn encode_in_chunks(
             if FLAC__stream_encoder_process_interleaved(
                 encoder.ptr, samples_32.as_ptr(), (chunk.len() / channel_count as usize) as u32,
             ) == 0 {
-                return Err("Failed to encode FLAC data".to_string());
+                return Err(format!("Failed to encode FLAC data for {}", source_name));
             }
         }
 
         if FLAC__stream_encoder_finish(encoder.ptr) == 0 {
-            return Err("Failed to finalize FLAC encoding".to_string());
+            return Err(format!("Failed to finalize FLAC encoding for {}", source_name));
         }
 
         Ok(output)
@@ -466,6 +478,18 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/test_data/zm_kar_roundend_normal.flac"
     );
+
+    #[test]
+    fn frames_that_contradict_streaminfo_are_rejected() {
+        let pcm: Vec<i16> = (0..4096).map(|i| ((i * 37) % 2000) as i16 - 1000).collect();
+        let mut flac = encode("mono.wav", 1, 48000, pcm.len() as i32, &pcm).expect("encode");
+        assert_eq!(decode("mono.flac", &flac).expect("decode").samples, pcm);
+
+        // STREAMINFO byte 12 holds the channel count minus one in bits 1..3: claim stereo.
+        flac[8 + 12] = (flac[8 + 12] & !0x0E) | (1 << 1);
+        let Err(err) = decode("patched.flac", &flac) else { panic!("mono frames in a stereo stream decoded") };
+        assert!(err.contains("patched.flac") && err.contains("1 channels"), "{err}");
+    }
 
     #[test]
     #[ignore = "external fixtures: see docs/testing.md"]
