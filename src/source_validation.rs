@@ -132,7 +132,13 @@ impl SourceValidation {
 
     pub fn save(&self, path: &Path) {
         if self.enabled {
-            let bytes = serde_json::to_vec(&*self.records.lock().unwrap()).unwrap();
+            // Sorted, so unchanged records give an unchanged file, which is then left alone.
+            let records = self.records.lock().unwrap();
+            let sorted: std::collections::BTreeMap<_, _> = records.iter().collect();
+            let bytes = serde_json::to_vec(&sorted).unwrap();
+            if fs::read(path).is_ok_and(|existing| existing == bytes) {
+                return;
+            }
             if let Err(error) = fs::write(path, bytes) {
                 eprintln!(
                     "  cannot save source validation {}: {error}",
