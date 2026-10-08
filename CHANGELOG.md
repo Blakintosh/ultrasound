@@ -2,14 +2,11 @@
 
 ## 1.0.0
 
-Your first build after updating reconverts every sound once, because the default encoding changed (below).
-Builds after that are incremental again.
+Your first build after updating reconverts every sound once, because the conversion recipe changed. Builds
+after that are incremental again.
 
 ### Changes you'll notice
 
-* Sounds are stored losslessly unless you ask for compression. Before, every sample lost its lowest bit even
-  with no compression level set, as it does with Treyarch's converter. Banks are about 15% larger as a result;
-  set `DefaultAudioCompression` if you need them smaller.
 * Much faster builds when little has changed. On local NTFS drives Ultrasound uses the drive's change journal to
   tell that a source file is unchanged without reading it again. Set `ULTRASOUND_FULL_HASH` to check every file
   instead.

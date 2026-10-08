@@ -12,7 +12,8 @@ Eight of the nine verified issues are fixed and covered by required tests:
 - Consistent envelope units for short clips, including silence and full scale.
 - Preservation of alias rows that differ in playback or conversion settings.
 - Recovery of invalid cached bank headers, including empty banks and bank identity.
-- Lossless default encoding; explicit lossy levels retain their existing processing.
+- An explicit default recipe: the encoder is lossless, and the default level drops only the lowest bit, as
+  Treyarch's converter does. Explicit lossy levels retain their existing processing.
 - Staged publication, with no changed deployment after conversion failure and
   rollback on handled publication errors.
 
@@ -139,22 +140,23 @@ Two real maps were built in a sandbox game root: the game's `sound_assets` and `
 `share/raw/sound`, the map's zone configs and its `.zone` copied, every write inside the sandbox. Each binary
 built cold, then three times unchanged. Outputs were parsed independently and compared.
 
-`zm_reactorfour` (7,898 sounds): against Ultrasound 0.3.1, v1 produced the same assets, frame counts, channels,
-looping and envelopes, and identical ambient, reverb, duck, music, script ID, asset and geometry outputs. The
-alias table gained one row: two rows differing only in volume (81 and 82) that 0.3.1 merged. Banks grew 14.9%
-from lossless encoding. Against Treyarch's converter, asset sets and metadata matched; envelopes differed for
-95% of assets, as they already did with 0.3.1; banks were 18% larger. Decoding 200 of Treyarch's assets showed
-every sample within one LSB of its source and none exact: Treyarch's encoder also drops the lowest bit.
+`zm_reactorfour` (7,898 sounds): a lossless default made banks 14.9% larger than 0.3.1's and 18% larger than
+Treyarch's. Decoding 200 of Treyarch's assets showed every sample within one LSB of its source and none exact:
+Treyarch's encoder drops the lowest bit too. The default level now does the same. With it, v1's banks are
+byte-identical to 0.3.1's, payload for payload, and 2.7% larger than Treyarch's. Ambient, reverb, duck, music,
+script ID, asset and geometry outputs are identical to 0.3.1's. The alias table gained one row: two rows
+differing only in volume (81 and 82) that 0.3.1 merged. Against Treyarch's converter, asset sets, frame counts,
+channels and looping matched; envelopes differed for 95% of assets, as they already did with 0.3.1.
 
 `zm_karelia` (10,177 sounds) cannot be built by Treyarch's converter, which rejects FileSpecs over 88 and names
-over 47 characters. With its configured `Low` compression, v1's banks were byte-identical to 0.3.1's. Lossless,
-the comparison with 0.3.1 matched `zm_reactorfour`'s. Low, Medium, High and Extreme gave 68.2%, 49.2%, 36.6%
-and 23.0% of the lossless bank size.
+over 47 characters. With its configured `Low` compression and with the default level, v1's banks were
+byte-identical to 0.3.1's. Low, Medium, High and Extreme gave 78.4%, 56.6%, 42.0% and 26.4% of the default
+level's bank size.
 
 | `zm_reactorfour` | Treyarch | Ultrasound 0.3.1 | Ultrasound 1.0.0 |
 | --- | ---: | ---: | ---: |
-| Cold | 54–73 s; 3 of 4 first attempts failed | 10.2 s | 8.7–14.5 s |
-| Unchanged | 18.5–35.3 s | 1.8–2.4 s | 2.0–3.0 s (one 9.1 s outlier) |
+| Cold | 54–73 s; 3 of 4 first attempts failed | 10.2 s | 8.7–15.2 s |
+| Unchanged | 18.5–35.3 s | 1.8–2.4 s | 1.8–3.0 s (one 9.1 s outlier) |
 
 Unchanged builds reused every source checksum, yet took about as long as 0.3.1's. The remaining time is the
 full byte comparison of roughly 770 MB of deployed banks, kept so that corrupt deployments are repaired. A

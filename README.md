@@ -61,13 +61,14 @@ files beside your map's cached banks in `sound\zone\CachedBanks`.
 
 ## Settings
 
-Sounds are stored losslessly unless you ask for compression. To trade quality for smaller banks:
+By default each sample keeps all but its lowest bit, as with Treyarch's converter; the difference is inaudible.
+To trade more quality for smaller banks:
 
 - Set `DefaultAudioCompression` to `None`, `Low`, `Medium`, `High` or `Extreme` in your map or mod's `.szc`
   file, for the whole zone, or on one of its `Sources` entries, for that alias file.
 - Set the `CompressionLevel` column in an alias file for a single alias. It wins over both.
 
-On one large map, Low, Medium, High and Extreme gave banks 68%, 49%, 37% and 23% of their lossless size. Your
+On one large map, Low, Medium, High and Extreme gave banks 78%, 57%, 42% and 26% of their default size. Your
 mileage may vary; listen to the result.
 
 Set the environment variable `ULTRASOUND_FULL_HASH` to any value to make Ultrasound read and check every source
