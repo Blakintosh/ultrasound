@@ -333,9 +333,21 @@ mod tests {
     #[test]
     fn default_level_drops_only_the_lowest_bit() {
         let mask = CompressionLevel::default().truncate_mask();
-        assert_eq!([1001i16 & mask, -1001 & mask, 1000 & mask], [1000, -1002, 1000]);
-        for level in [CompressionLevel::Low, CompressionLevel::Medium, CompressionLevel::High, CompressionLevel::Extreme] {
-            assert_eq!(level.truncate_mask() & 1, 0, "{level:?} must drop at least what the default drops");
+        assert_eq!(
+            [1001i16 & mask, -1001 & mask, 1000 & mask],
+            [1000, -1002, 1000]
+        );
+        for level in [
+            CompressionLevel::Low,
+            CompressionLevel::Medium,
+            CompressionLevel::High,
+            CompressionLevel::Extreme,
+        ] {
+            assert_eq!(
+                level.truncate_mask() & 1,
+                0,
+                "{level:?} must drop at least what the default drops"
+            );
         }
     }
 
