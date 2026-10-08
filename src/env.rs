@@ -9,7 +9,10 @@ pub struct Env {
 
 impl Env {
     pub fn with_output_root(&self, root: &Path) -> Self {
-        Self { platform_working_dir: root.to_path_buf(), ..self.clone() }
+        Self {
+            platform_working_dir: root.to_path_buf(),
+            ..self.clone()
+        }
     }
 
     pub fn new(platform_working_dir: &str, source_dir: &str) -> Result<Self, String> {

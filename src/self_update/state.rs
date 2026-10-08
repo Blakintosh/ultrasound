@@ -25,7 +25,11 @@ pub struct State {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Notice {
-    Updated { version: String, previous: String, url: String },
+    Updated {
+        version: String,
+        previous: String,
+        url: String,
+    },
     /// A newer release that couldn't be installed here.
     Available {
         version: String,
@@ -65,18 +69,37 @@ impl State {
     pub fn take_notice(&mut self, current: Version) -> (Option<String>, bool) {
         match self.notice.clone() {
             None => (None, false),
-            Some(Notice::Updated { version, previous, url }) => {
+            Some(Notice::Updated {
+                version,
+                previous,
+                url,
+            }) => {
                 self.notice = None;
-                (Some(format!("Ultrasound {version} is installed. You had {previous}. Release notes: {url}")), true)
+                (
+                    Some(format!(
+                        "Ultrasound {version} is installed. You had {previous}. Release notes: {url}"
+                    )),
+                    true,
+                )
             }
-            Some(Notice::Available { version, url, reason, installer }) => {
+            Some(Notice::Available {
+                version,
+                url,
+                reason,
+                installer,
+            }) => {
                 if Version::parse(&version).is_some_and(|v| v > current) {
                     let reason = reason.map(|r| format!(" {r}")).unwrap_or_default();
                     let link = match installer {
                         Some(installer) => format!("Download the installer: {installer}"),
                         None => format!("Open the release page: {url}"),
                     };
-                    (Some(format!("Couldn't install Ultrasound {version}.{reason} {link}")), false)
+                    (
+                        Some(format!(
+                            "Couldn't install Ultrasound {version}.{reason} {link}"
+                        )),
+                        false,
+                    )
                 } else {
                     self.notice = None;
                     (None, true)
@@ -91,7 +114,8 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ultrasound-state-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("ultrasound-state-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -130,10 +154,19 @@ mod tests {
         assert_eq!(State::load(&path), available);
 
         // Written before the reason and installer were recorded.
-        fs::write(&path, r#"{"notice":{"kind":"available","version":"1.0.0","url":"u"}}"#).unwrap();
+        fs::write(
+            &path,
+            r#"{"notice":{"kind":"available","version":"1.0.0","url":"u"}}"#,
+        )
+        .unwrap();
         assert_eq!(
             State::load(&path).notice,
-            Some(Notice::Available { version: "1.0.0".into(), url: "u".into(), reason: None, installer: None })
+            Some(Notice::Available {
+                version: "1.0.0".into(),
+                url: "u".into(),
+                reason: None,
+                installer: None
+            })
         );
 
         fs::write(&path, "{not json").unwrap();
@@ -145,7 +178,10 @@ mod tests {
 
     #[test]
     fn checks_at_most_daily() {
-        let state = State { last_check: 1_000_000, ..State::default() };
+        let state = State {
+            last_check: 1_000_000,
+            ..State::default()
+        };
         assert!(!state.check_due(1_000_000));
         assert!(!state.check_due(1_000_000 + CHECK_INTERVAL_SECS - 1));
         assert!(state.check_due(1_000_000 + CHECK_INTERVAL_SECS));
@@ -157,12 +193,19 @@ mod tests {
     fn notices_print_once_or_until_resolved() {
         let current = Version::parse("0.3.1").unwrap();
         let mut state = State {
-            notice: Some(Notice::Updated { version: "0.3.1".into(), previous: "0.3.0".into(), url: "u".into() }),
+            notice: Some(Notice::Updated {
+                version: "0.3.1".into(),
+                previous: "0.3.0".into(),
+                url: "u".into(),
+            }),
             ..State::default()
         };
         assert_eq!(
             state.take_notice(current),
-            (Some("Ultrasound 0.3.1 is installed. You had 0.3.0. Release notes: u".into()), true)
+            (
+                Some("Ultrasound 0.3.1 is installed. You had 0.3.0. Release notes: u".into()),
+                true
+            )
         );
         assert_eq!(state.take_notice(current), (None, false));
 
@@ -177,10 +220,18 @@ mod tests {
         for _ in 0..2 {
             assert_eq!(state.take_notice(current), (Some(line.into()), false));
         }
-        state.notice = Some(Notice::Available { version: "0.3.2".into(), url: "u".into(), reason: None, installer: None });
+        state.notice = Some(Notice::Available {
+            version: "0.3.2".into(),
+            url: "u".into(),
+            reason: None,
+            installer: None,
+        });
         assert_eq!(
             state.take_notice(current),
-            (Some("Couldn't install Ultrasound 0.3.2. Open the release page: u".into()), false)
+            (
+                Some("Couldn't install Ultrasound 0.3.2. Open the release page: u".into()),
+                false
+            )
         );
         let newer = Version::parse("0.3.2").unwrap();
         assert_eq!(state.take_notice(newer), (None, true));

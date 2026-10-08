@@ -434,10 +434,14 @@ pub(crate) fn dedup_aliases(aliases: &mut Vec<RowAlias>) {
     let mut groups: HashMap<(String, String, String, String), Vec<usize>> = HashMap::new();
     let mut unique: Vec<RowAlias> = Vec::with_capacity(aliases.len());
     for alias in std::mem::take(aliases) {
-        let group = groups.entry((
-            alias.name.clone(), alias.file_spec.clone(),
-            alias.file_spec_sustain.clone(), alias.file_spec_release.clone(),
-        )).or_default();
+        let group = groups
+            .entry((
+                alias.name.clone(),
+                alias.file_spec.clone(),
+                alias.file_spec_sustain.clone(),
+                alias.file_spec_release.clone(),
+            ))
+            .or_default();
         if !group.iter().any(|&index| unique[index] == alias) {
             group.push(unique.len());
             unique.push(alias);
@@ -822,8 +826,7 @@ weap_template,,,,,,,,,,,
             .has_headers(true)
             .from_path(REF_PATH)
             .expect("baseline alias.sz");
-        let mut baseline_counts: HashMap<&str, usize> =
-            TARGETS.iter().map(|n| (*n, 0)).collect();
+        let mut baseline_counts: HashMap<&str, usize> = TARGETS.iter().map(|n| (*n, 0)).collect();
         for rec in reader.records() {
             let rec = rec.expect("record");
             if let Some(name) = rec.get(0) {

@@ -114,13 +114,16 @@ pub fn update_bank(
         .par_iter()
         .map(|name| -> Result<Option<_>, String> {
             let src = &source_map[*name];
-            let (checksum, data) = validation.read(&src.source_name,
+            let (checksum, data) = validation.read(
+                &src.source_name,
                 &src.compression_level.recipe_fingerprint(),
-                existing_checksums.get(&string_hash::hash(name)).copied())?;
+                existing_checksums.get(&string_hash::hash(name)).copied(),
+            )?;
             if existing_checksums.get(&string_hash::hash(name)) == Some(&checksum) {
                 return Ok(None);
             }
-            let output = convert_source_data(src, data.expect("changed sources are read"), checksum)?;
+            let output =
+                convert_source_data(src, data.expect("changed sources are read"), checksum)?;
             Ok(Some(((*name).clone(), output)))
         })
         .collect::<Result<Vec<_>, String>>()?
@@ -170,7 +173,9 @@ pub fn update_bank(
 
     // 3. Deploy cache → ship (covers a missing ship copy on otherwise warm
     //    runs as well as the post-modify path).
-    let deployed_path = snapshot.env.get_deploy_bank_dir(&language.deploy_name)
+    let deployed_path = snapshot
+        .env
+        .get_deploy_bank_dir(&language.deploy_name)
         .join(format!("{}.{}", base_name, ext));
     if !crate::staged_outputs::files_equal(&cache_path, &deployed_path)? {
         deploy(&cache_path, &ship_path)?;

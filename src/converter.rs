@@ -5,13 +5,8 @@ use std::str::FromStr;
 use serde::Deserialize;
 
 use crate::{
-    asset_types::AssetEnvelope,
-    bank::bank_entry::BankEntry,
-    checksum::Checksum,
-    decoded_audio::DecodedAudio,
-    flac, ogg,
-    riff::Riff,
-    tables::row_platform::RowPlatform,
+    asset_types::AssetEnvelope, bank::bank_entry::BankEntry, checksum::Checksum,
+    decoded_audio::DecodedAudio, flac, ogg, riff::Riff, tables::row_platform::RowPlatform,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -108,7 +103,10 @@ impl CompressionLevel {
             threshold[0],
             threshold[1],
             // Revision 2 also removes the encoder's implicit lossy sample mask.
-            2, 0, 0, 0,
+            2,
+            0,
+            0,
+            0,
             crate::flac::ENCODER_EFFORT as u8,
         ]
     }

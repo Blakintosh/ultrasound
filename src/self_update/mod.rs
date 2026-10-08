@@ -46,7 +46,10 @@ impl Install {
         }
         let local = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty())?;
         let key = dir.to_string_lossy().to_lowercase();
-        let id: String = Sha256::digest(key.as_bytes())[..8].iter().map(|b| format!("{b:02x}")).collect();
+        let id: String = Sha256::digest(key.as_bytes())[..8]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
         let data = Path::new(&local).join("gscode").join("ultrasound").join(id);
         Some(Install { exe, dir, data })
     }
@@ -69,12 +72,17 @@ impl Install {
 }
 
 fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// On every start: remove files left by the last swap and report its outcome.
 pub fn on_start() {
-    let Some(install) = Install::locate() else { return };
+    let Some(install) = Install::locate() else {
+        return;
+    };
     install::remove_leftovers(&install.dir);
     let mut state = install.load();
     let (line, changed) = state.take_notice(Version::current());
@@ -88,7 +96,9 @@ pub fn on_start() {
 
 /// After a successful run: start the background check if one is due. Never waits for it.
 pub fn after_success() {
-    let Some(install) = Install::locate() else { return };
+    let Some(install) = Install::locate() else {
+        return;
+    };
     let mut state = install.load();
     let now = now();
     if !state.check_due(now) {
@@ -103,18 +113,30 @@ enum Outcome {
     /// Offline, rate-limited, not found, or nothing usable published: say nothing.
     Silent(String),
     UpToDate,
-    Installed { version: Version, url: String },
+    Installed {
+        version: Version,
+        url: String,
+    },
     /// A newer release exists but could not be installed here.
-    Unavailable { version: Version, url: String, installer: Option<String>, failure: Failure },
+    Unavailable {
+        version: Version,
+        url: String,
+        installer: Option<String>,
+        failure: Failure,
+    },
 }
 
 /// The `--update` process. Writes nothing to stdout/stderr; the outcome goes to the state file.
 pub fn run_update() {
-    let Some(install) = Install::locate() else { return };
+    let Some(install) = Install::locate() else {
+        return;
+    };
     if fs::create_dir_all(&install.data).is_err() {
         return;
     }
-    let Some(_lock) = lock(&install.data.join("update.lock")) else { return };
+    let Some(_lock) = lock(&install.data.join("update.lock")) else {
+        return;
+    };
     install::remove_leftovers(&install.dir);
     let work = install.data.join("download");
     let _ = fs::remove_dir_all(&work);
@@ -142,7 +164,12 @@ pub fn run_update() {
                 url,
             });
         }
-        Outcome::Unavailable { version, url, installer, failure } => {
+        Outcome::Unavailable {
+            version,
+            url,
+            installer,
+            failure,
+        } => {
             state.last_result = Some(format!("{version} not installed: {}", failure.detail));
             state.notice = Some(Notice::Available {
                 version: version.to_string(),
@@ -176,7 +203,10 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
     if let Err(e) = install::download(&feed, &latest, protocols, 30, true) {
         return Outcome::Silent(format!("release check failed: {e}"));
     }
-    let release = match fs::read_to_string(&latest).map_err(|e| e.to_string()).and_then(|t| parse_release(&t)) {
+    let release = match fs::read_to_string(&latest)
+        .map_err(|e| e.to_string())
+        .and_then(|t| parse_release(&t))
+    {
         Ok(release) => release,
         Err(e) => return Outcome::Silent(format!("release check failed: {e}")),
     };
@@ -215,7 +245,10 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
             ));
         }
         Err(e) => {
-            return unavailable(Failure::new("The download couldn't be read.", format!("cannot read bundle: {e}")));
+            return unavailable(Failure::new(
+                "The download couldn't be read.",
+                format!("cannot read bundle: {e}"),
+            ));
         }
     }
     let staged = match install::extract(&zip, &work.join("bundle")) {
@@ -223,7 +256,10 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
         Err(e) => return unavailable(e),
     };
     match install::swap(&install.dir, &staged) {
-        Ok(()) => Outcome::Installed { version: release.version, url: release.url.clone() },
+        Ok(()) => Outcome::Installed {
+            version: release.version,
+            url: release.url.clone(),
+        },
         Err(e) => unavailable(e),
     }
 }

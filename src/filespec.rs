@@ -77,9 +77,11 @@ pub fn expand(
 }
 
 fn is_supported_audio(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| ["wav", "flac", "ogg"].iter().any(|s| e.eq_ignore_ascii_case(s)))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        ["wav", "flac", "ogg"]
+            .iter()
+            .any(|s| e.eq_ignore_ascii_case(s))
+    })
 }
 
 /// If `full` is a supported audio file, return [full]. If it's a directory,
@@ -235,11 +237,24 @@ mod tests {
         }
 
         let names = |paths: Vec<PathBuf>| -> Vec<String> {
-            paths.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect()
+            paths
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
         };
-        assert_eq!(names(enumerate_sources(&dir).unwrap()), ["a.flac", "b.WAV", "c.Ogg"]);
-        assert_eq!(names(enumerate_sources(&dir.join("b.WAV")).unwrap()), ["b.WAV"]);
-        assert!(enumerate_sources(&dir.join("notes.txt")).unwrap().is_empty());
+        assert_eq!(
+            names(enumerate_sources(&dir).unwrap()),
+            ["a.flac", "b.WAV", "c.Ogg"]
+        );
+        assert_eq!(
+            names(enumerate_sources(&dir.join("b.WAV")).unwrap()),
+            ["b.WAV"]
+        );
+        assert!(
+            enumerate_sources(&dir.join("notes.txt"))
+                .unwrap()
+                .is_empty()
+        );
 
         std::fs::write(dir.join("has space.wav"), b"").unwrap();
         let err = enumerate_sources(&dir).unwrap_err();

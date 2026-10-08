@@ -86,23 +86,38 @@ const INSTALLER_NAME: &str = "ultrasound-setup.exe";
 
 /// Parses a `releases/latest` response. Drafts, pre-releases and non-`X.Y.Z` tags are rejected.
 pub fn parse_release(json: &str) -> Result<Release, String> {
-    let api: ApiRelease = serde_json::from_str(json).map_err(|e| format!("invalid release JSON: {e}"))?;
+    let api: ApiRelease =
+        serde_json::from_str(json).map_err(|e| format!("invalid release JSON: {e}"))?;
     if api.draft || api.prerelease {
         return Err("not a full release".into());
     }
-    let version = Version::parse(&api.tag_name).ok_or_else(|| format!("unsupported tag '{}'", api.tag_name))?;
+    let version = Version::parse(&api.tag_name)
+        .ok_or_else(|| format!("unsupported tag '{}'", api.tag_name))?;
     let name = bundle_name(version);
-    let installer = api.assets.iter().find(|a| a.name == INSTALLER_NAME).map(|a| a.browser_download_url.clone());
-    let bundle = api.assets.into_iter().find(|a| a.name == name).map(|a| Bundle {
-        sha256: a.digest.as_deref().and_then(parse_digest),
-        name: a.name,
-        url: a.browser_download_url,
-    });
+    let installer = api
+        .assets
+        .iter()
+        .find(|a| a.name == INSTALLER_NAME)
+        .map(|a| a.browser_download_url.clone());
+    let bundle = api
+        .assets
+        .into_iter()
+        .find(|a| a.name == name)
+        .map(|a| Bundle {
+            sha256: a.digest.as_deref().and_then(parse_digest),
+            name: a.name,
+            url: a.browser_download_url,
+        });
     let url = api
         .html_url
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| format!("{RELEASES_URL}v{version}"));
-    Ok(Release { version, url, bundle, installer })
+    Ok(Release {
+        version,
+        url,
+        bundle,
+        installer,
+    })
 }
 
 /// Parses an asset digest of the form `sha256:<64 hex digits>`.
@@ -133,7 +148,19 @@ mod tests {
         assert!(v("1.0.0") > v("0.99.99"));
         assert!(v("0.4.0") > v("0.3.99"));
         assert_eq!(v("v1.2.3"), v("1.2.3"));
-        for bad in ["", "1", "1.2", "1.2.3.4", "1.2.x", "1.2.3-beta.1", "1.2.3+build", "v", "1..3", "-1.2.3", "+1.2.3"] {
+        for bad in [
+            "",
+            "1",
+            "1.2",
+            "1.2.3.4",
+            "1.2.x",
+            "1.2.3-beta.1",
+            "1.2.3+build",
+            "v",
+            "1..3",
+            "-1.2.3",
+            "+1.2.3",
+        ] {
             assert_eq!(Version::parse(bad), None, "{bad}");
         }
         assert_eq!(Version::current().to_string(), env!("CARGO_PKG_VERSION"));
@@ -145,7 +172,10 @@ mod tests {
         let parsed = parse_digest(&format!("sha256:{hex}")).unwrap();
         assert_eq!(parsed[0], 0x00);
         assert_eq!(parsed[1], 0xff);
-        assert_eq!(parse_digest(&format!("sha256:{}", hex.to_uppercase())), Some(parsed));
+        assert_eq!(
+            parse_digest(&format!("sha256:{}", hex.to_uppercase())),
+            Some(parsed)
+        );
         assert_eq!(parse_digest(&hex), None);
         assert_eq!(parse_digest(&format!("sha512:{hex}")), None);
         assert_eq!(parse_digest(&format!("sha256:{}", &hex[1..])), None);
@@ -179,10 +209,16 @@ mod tests {
         let release = parse_release(old).unwrap();
         assert_eq!(release.bundle, None);
         assert_eq!(release.installer, None);
-        assert_eq!(release.url, "https://github.com/Blakintosh/ultrasound/releases/tag/v0.3.1");
+        assert_eq!(
+            release.url,
+            "https://github.com/Blakintosh/ultrasound/releases/tag/v0.3.1"
+        );
 
         let no_digest = r#"{"tag_name":"v1.0.0","assets":[{"name":"ultrasound-1.0.0-win-x64.zip","browser_download_url":"u"}]}"#;
-        assert_eq!(parse_release(no_digest).unwrap().bundle.unwrap().sha256, None);
+        assert_eq!(
+            parse_release(no_digest).unwrap().bundle.unwrap().sha256,
+            None
+        );
 
         assert!(parse_release(r#"{"tag_name":"v1.0.0","prerelease":true}"#).is_err());
         assert!(parse_release(r#"{"tag_name":"v1.0.0","draft":true}"#).is_err());

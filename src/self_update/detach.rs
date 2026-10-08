@@ -73,10 +73,11 @@ pub fn spawn_detached(exe: &Path, args: &str, cwd: &Path) -> io::Result<()> {
     }
 
     let application = wide(exe.as_os_str());
-    let mut command_line: Vec<u16> = std::ffi::OsString::from(format!("\"{}\" {args}", exe.display()))
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    let mut command_line: Vec<u16> =
+        std::ffi::OsString::from(format!("\"{}\" {args}", exe.display()))
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
     let directory = wide(cwd.as_os_str());
     // Explicitly null standard handles; without STARTF_USESTDHANDLES the child could be handed our
     // handle values, which mean nothing (or something else) in a process that inherited nothing.

@@ -65,7 +65,9 @@ impl Riff {
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
-                .seek(SeekFrom::Current(chunk_size as i64 + (chunk_size & 1) as i64))
+                .seek(SeekFrom::Current(
+                    chunk_size as i64 + (chunk_size & 1) as i64,
+                ))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
@@ -88,7 +90,9 @@ impl Riff {
         let _byte_rate = read_u32(&mut reader, file_name)?;
         let frame_size = read_u16(&mut reader, file_name)?;
         let _bits_per_sample = read_u16(&mut reader, file_name)?;
-        if channel_count == 0 || frame_size == 0 || frame_rate == 0
+        if channel_count == 0
+            || frame_size == 0
+            || frame_rate == 0
             || frame_size % channel_count != 0
         {
             return Err(format!("File {} has invalid audio dimensions.", file_name));
@@ -116,7 +120,9 @@ impl Riff {
 
             // Otherwise skip over this chunk, keep looking.
             pos = reader
-                .seek(SeekFrom::Current(chunk_size as i64 + (chunk_size & 1) as i64))
+                .seek(SeekFrom::Current(
+                    chunk_size as i64 + (chunk_size & 1) as i64,
+                ))
                 .map_err(|e| format!("Failed to seek in file {}: {}", file_name, e))?;
         }
 
@@ -212,7 +218,6 @@ impl Riff {
 
         result
     }
-
 }
 
 fn read_u32(reader: &mut impl Read, file_name: &str) -> Result<u32, String> {

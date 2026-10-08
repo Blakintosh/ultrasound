@@ -20,11 +20,15 @@ pub struct Failure {
 
 impl Failure {
     pub fn new(message: impl Into<String>, detail: impl Into<String>) -> Self {
-        Failure { message: message.into(), detail: detail.into() }
+        Failure {
+            message: message.into(),
+            detail: detail.into(),
+        }
     }
 }
 
-const NOTHING_CHANGED_IN_USE: &str = "A file was in use or couldn't be replaced. Nothing was changed.";
+const NOTHING_CHANGED_IN_USE: &str =
+    "A file was in use or couldn't be replaced. Nothing was changed.";
 
 fn sibling(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
@@ -78,13 +82,35 @@ fn run_tool(command: &mut Command, limit: Duration) -> Result<(), String> {
 }
 
 /// Fetches `url` into `out` with Windows' own curl.exe.
-pub fn download(url: &str, out: &Path, protocols: &str, max_secs: u64, api: bool) -> Result<(), String> {
+pub fn download(
+    url: &str,
+    out: &Path,
+    protocols: &str,
+    max_secs: u64,
+    api: bool,
+) -> Result<(), String> {
     let mut command = Command::new(system_tool("curl.exe"));
     command
-        .args(["--silent", "--fail", "--location", "--proto", protocols, "--proto-redir", protocols])
-        .args(["--connect-timeout", "10", "--max-time", &max_secs.to_string()])
+        .args([
+            "--silent",
+            "--fail",
+            "--location",
+            "--proto",
+            protocols,
+            "--proto-redir",
+            protocols,
+        ])
+        .args([
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            &max_secs.to_string(),
+        ])
         .args(["--max-filesize", "268435456"])
-        .args(["--user-agent", concat!("ultrasound/", env!("CARGO_PKG_VERSION"))]);
+        .args([
+            "--user-agent",
+            concat!("ultrasound/", env!("CARGO_PKG_VERSION")),
+        ]);
     if api {
         command.args(["--header", "Accept: application/vnd.github+json"]);
     }
@@ -155,7 +181,10 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), Failure> {
             } else {
                 NOTHING_CHANGED_IN_USE
             };
-            return Err(Failure::new(message, format!("cannot write {}: {e}", new.display())));
+            return Err(Failure::new(
+                message,
+                format!("cannot write {}: {e}", new.display()),
+            ));
         }
     }
     for target in &targets {
@@ -164,7 +193,10 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), Failure> {
             && e.kind() != std::io::ErrorKind::NotFound
         {
             clean_news();
-            return Err(Failure::new(NOTHING_CHANGED_IN_USE, format!("cannot remove {}: {e}", old.display())));
+            return Err(Failure::new(
+                NOTHING_CHANGED_IN_USE,
+                format!("cannot remove {}: {e}", old.display()),
+            ));
         }
     }
 
@@ -201,7 +233,10 @@ pub fn swap(dir: &Path, staged: &[PathBuf]) -> Result<(), Failure> {
     }
     clean_news();
     if unrestored.is_empty() {
-        Err(Failure::new(NOTHING_CHANGED_IN_USE, format!("{failure}; previous files restored")))
+        Err(Failure::new(
+            NOTHING_CHANGED_IN_USE,
+            format!("{failure}; previous files restored"),
+        ))
     } else {
         Err(Failure::new(
             "Some files couldn't be put back. Reinstall Ultrasound from the release page.",
@@ -215,7 +250,8 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> (PathBuf, Vec<PathBuf>) {
-        let root = std::env::temp_dir().join(format!("ultrasound-swap-{name}-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("ultrasound-swap-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let dir = root.join("sound");
         let staged = root.join("staged");
@@ -235,7 +271,10 @@ mod tests {
             .unwrap()
             .map(|e| {
                 let e = e.unwrap();
-                (e.file_name().to_string_lossy().into_owned(), fs::read_to_string(e.path()).unwrap())
+                (
+                    e.file_name().to_string_lossy().into_owned(),
+                    fs::read_to_string(e.path()).unwrap(),
+                )
             })
             .collect();
         names.sort();
@@ -274,7 +313,10 @@ mod tests {
             .open(dir.join("libFLAC.dll"))
             .unwrap();
         let error = swap(&dir, &staged).unwrap_err();
-        assert!(error.detail.contains("previous files restored"), "{error:?}");
+        assert!(
+            error.detail.contains("previous files restored"),
+            "{error:?}"
+        );
         assert_eq!(error.message, NOTHING_CHANGED_IN_USE);
         drop(locked);
         assert_eq!(contents(&dir), before);
@@ -286,7 +328,12 @@ mod tests {
         let (dir, mut staged) = fixture("missing");
         let before = contents(&dir);
         staged[1] = staged[1].with_file_name("absent.dll");
-        assert!(swap(&dir, &staged).unwrap_err().detail.starts_with("cannot write"));
+        assert!(
+            swap(&dir, &staged)
+                .unwrap_err()
+                .detail
+                .starts_with("cannot write")
+        );
         assert_eq!(contents(&dir), before);
         fs::remove_dir_all(dir.parent().unwrap()).unwrap();
     }

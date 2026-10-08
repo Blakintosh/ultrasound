@@ -18,7 +18,8 @@ struct PublishedFile {
 
 impl StagedOutputs {
     pub fn new(output_root: &Path) -> Result<Self, String> {
-        fs::create_dir_all(output_root).map_err(|e| format!("create {}: {}", output_root.display(), e))?;
+        fs::create_dir_all(output_root)
+            .map_err(|e| format!("create {}: {}", output_root.display(), e))?;
         loop {
             let id = NEXT_STAGE.fetch_add(1, Ordering::Relaxed);
             let root = output_root.join(format!(".ultrasound-stage-{}-{}", std::process::id(), id));
@@ -139,7 +140,12 @@ pub fn files_equal(source_path: &Path, destination_path: &Path) -> Result<bool, 
         Err(e) => return Err(read_error(destination_path)(e)),
     };
     let length = source.metadata().map_err(read_error(source_path))?.len();
-    if destination.metadata().map_err(read_error(destination_path))?.len() != length {
+    if destination
+        .metadata()
+        .map_err(read_error(destination_path))?
+        .len()
+        != length
+    {
         return Ok(false);
     }
     let mut left = [0u8; 65536];

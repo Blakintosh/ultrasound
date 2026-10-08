@@ -65,8 +65,7 @@ impl SoundZoneConfig {
     }
 
     fn warnings(&self) -> Vec<String> {
-        const MISNAMED: &str =
-            "DefaultAliasCompression is not a setting and is ignored; the setting is DefaultAudioCompression";
+        const MISNAMED: &str = "DefaultAliasCompression is not a setting and is ignored; the setting is DefaultAudioCompression";
         let mut warnings = Vec::new();
         if self.misnamed_compression.is_some() {
             warnings.push(MISNAMED.to_string());
@@ -126,10 +125,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(config.default_audio_compression, CompressionLevel::None);
-        assert_eq!(config.sources[1].default_audio_compression, Some(CompressionLevel::Low));
+        assert_eq!(
+            config.sources[1].default_audio_compression,
+            Some(CompressionLevel::Low)
+        );
         let warnings = config.warnings();
         assert_eq!(warnings.len(), 2, "{warnings:?}");
-        assert!(warnings[1].starts_with("source 'sfx': DefaultAliasCompression"), "{warnings:?}");
+        assert!(
+            warnings[1].starts_with("source 'sfx': DefaultAliasCompression"),
+            "{warnings:?}"
+        );
 
         let clean: SoundZoneConfig =
             json5::from_str(r#"{ Name: "zm_x", DefaultAudioCompression: "High" }"#).unwrap();

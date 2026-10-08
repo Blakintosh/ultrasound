@@ -295,7 +295,14 @@ pub fn encode(
     frame_count: i32,
     pcm_data: &[i16],
 ) -> Result<Vec<u8>, String> {
-    encode_in_chunks(source_name, channel_count, sample_rate, frame_count, pcm_data, 16384)
+    encode_in_chunks(
+        source_name,
+        channel_count,
+        sample_rate,
+        frame_count,
+        pcm_data,
+        16384,
+    )
 }
 
 fn encode_in_chunks(
@@ -306,7 +313,8 @@ fn encode_in_chunks(
     pcm_data: &[i16],
     chunk_frames: usize,
 ) -> Result<Vec<u8>, String> {
-    if !(1..=2).contains(&channel_count) || frame_count < 0
+    if !(1..=2).contains(&channel_count)
+        || frame_count < 0
         || pcm_data.len() != frame_count as usize * channel_count as usize
     {
         return Err(format!("Invalid PCM dimensions for {}", source_name));
@@ -345,8 +353,7 @@ fn encode_in_chunks(
         if init_result != 0 {
             return Err(format!(
                 "Failed to initialize FLAC encoder for {}: error code {}",
-                source_name,
-                init_result
+                source_name, init_result
             ));
         }
 
@@ -356,14 +363,20 @@ fn encode_in_chunks(
             samples_32.clear();
             samples_32.extend(chunk.iter().map(|&sample| sample as i32));
             if FLAC__stream_encoder_process_interleaved(
-                encoder.ptr, samples_32.as_ptr(), (chunk.len() / channel_count as usize) as u32,
-            ) == 0 {
+                encoder.ptr,
+                samples_32.as_ptr(),
+                (chunk.len() / channel_count as usize) as u32,
+            ) == 0
+            {
                 return Err(format!("Failed to encode FLAC data for {}", source_name));
             }
         }
 
         if FLAC__stream_encoder_finish(encoder.ptr) == 0 {
-            return Err(format!("Failed to finalize FLAC encoding for {}", source_name));
+            return Err(format!(
+                "Failed to finalize FLAC encoding for {}",
+                source_name
+            ));
         }
 
         Ok(output)
@@ -462,8 +475,10 @@ mod tests {
         for channels in [1, 2] {
             let frames = 48003;
             let pcm: Vec<i16> = (0..frames * channels)
-                .map(|i| ((i as u32).wrapping_mul(7919) & 65535) as i16).collect();
-            let whole = encode_in_chunks("whole", channels, 48000, frames, &pcm, frames as usize).unwrap();
+                .map(|i| ((i as u32).wrapping_mul(7919) & 65535) as i16)
+                .collect();
+            let whole =
+                encode_in_chunks("whole", channels, 48000, frames, &pcm, frames as usize).unwrap();
             let blocked = encode("blocked", channels, 48000, frames, &pcm).unwrap();
             assert_eq!(blocked, whole);
             assert_eq!(decode("blocked", &blocked).unwrap().samples, pcm);
@@ -483,8 +498,13 @@ mod tests {
 
         // STREAMINFO byte 12 holds the channel count minus one in bits 1..3: claim stereo.
         flac[8 + 12] = (flac[8 + 12] & !0x0E) | (1 << 1);
-        let Err(err) = decode("patched.flac", &flac) else { panic!("mono frames in a stereo stream decoded") };
-        assert!(err.contains("patched.flac") && err.contains("1 channels"), "{err}");
+        let Err(err) = decode("patched.flac", &flac) else {
+            panic!("mono frames in a stereo stream decoded")
+        };
+        assert!(
+            err.contains("patched.flac") && err.contains("1 channels"),
+            "{err}"
+        );
     }
 
     #[test]
