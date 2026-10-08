@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::converter::CompressionLevel;
 
@@ -33,6 +34,10 @@ pub struct SoundZoneConfig {
     /// `Medium`, `High`, `Extreme`.
     #[serde(rename = "DefaultAudioCompression", default)]
     pub default_audio_compression: CompressionLevel,
+    /// Earlier documentation named the setting `DefaultAliasCompression`. It has never been read;
+    /// it is recognised only to warn about it.
+    #[serde(rename = "DefaultAliasCompression", default)]
+    misnamed_compression: Option<IgnoredAny>,
 }
 
 impl SoundZoneConfig {
@@ -51,7 +56,25 @@ impl SoundZoneConfig {
             config.parent = String::new();
         }
 
+        for warning in config.warnings() {
+            eprintln!("warning: {}: {}", path.display(), warning);
+        }
         Ok(config)
+    }
+
+    fn warnings(&self) -> Vec<String> {
+        const MISNAMED: &str =
+            "DefaultAliasCompression is not a setting and is ignored; the setting is DefaultAudioCompression";
+        let mut warnings = Vec::new();
+        if self.misnamed_compression.is_some() {
+            warnings.push(MISNAMED.to_string());
+        }
+        for source in &self.sources {
+            if source.misnamed_compression.is_some() {
+                warnings.push(format!("source '{}': {}", source.name, MISNAMED));
+            }
+        }
+        warnings
     }
 }
 
@@ -72,6 +95,8 @@ pub struct SoundZoneSource {
     /// still possible. Absent → inherit the zone default.
     #[serde(rename = "DefaultAudioCompression", default)]
     pub default_audio_compression: Option<CompressionLevel>,
+    #[serde(rename = "DefaultAliasCompression", default)]
+    misnamed_compression: Option<IgnoredAny>,
 }
 
 #[derive(Deserialize)]
@@ -87,6 +112,25 @@ pub enum SoundZoneTableType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn misnamed_compression_setting_is_reported_not_applied() {
+        let config: SoundZoneConfig = json5::from_str(
+            r#"{ Name: "zm_x", DefaultAliasCompression: "High",
+                 Sources: [{ Type: "ALIAS", Name: "sfx", DefaultAliasCompression: "Low" },
+                           { Type: "ALIAS", Name: "vox", DefaultAudioCompression: "Low" }] }"#,
+        )
+        .unwrap();
+        assert_eq!(config.default_audio_compression, CompressionLevel::None);
+        assert_eq!(config.sources[1].default_audio_compression, Some(CompressionLevel::Low));
+        let warnings = config.warnings();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(warnings[1].starts_with("source 'sfx': DefaultAliasCompression"), "{warnings:?}");
+
+        let clean: SoundZoneConfig =
+            json5::from_str(r#"{ Name: "zm_x", DefaultAudioCompression: "High" }"#).unwrap();
+        assert!(clean.warnings().is_empty());
+    }
 
     #[test]
     #[ignore = "external fixtures: see docs/testing.md"]
