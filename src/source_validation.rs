@@ -125,9 +125,12 @@ impl SourceValidation {
         Ok((checksum, Some(data)))
     }
 
+    /// How many sources kept their checksum without being hashed again.
+    pub fn reused(&self) -> usize {
+        self.reused.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub fn save(&self, path: &Path) {
-        let reused = self.reused.load(std::sync::atomic::Ordering::Relaxed);
-        println!("  source validation: {reused} journal hits");
         if self.enabled {
             let bytes = serde_json::to_vec(&*self.records.lock().unwrap()).unwrap();
             if let Err(error) = fs::write(path, bytes) {

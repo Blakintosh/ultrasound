@@ -65,19 +65,20 @@ pub fn update_bank(
     let cache_path: PathBuf = cache_dir.join(format!("{}.{}", base_name, ext));
     let ship_path: PathBuf = ship_dir.join(format!("{}.{}", base_name, ext));
 
+    let cache_name = cache_path
+        .to_str()
+        .ok_or_else(|| format!("path is not valid Unicode: {}", cache_path.display()))?;
+
     // 1. Load existing bank if present, else start from an invalidated empty one.
     let mut bank = if cache_path.exists() {
-        SoundAssetBank::load(
-            cache_path.to_str().unwrap(),
-            platform.converted_asset_version,
-        )
+        SoundAssetBank::load(cache_name, platform.converted_asset_version)
     } else {
         let mut hdr = BankHeader::new();
         hdr.set_zone_name(&zone.name);
         hdr.set_platform(&platform.platform);
         hdr.set_language(&language.deploy_name);
         hdr.invalidate();
-        SoundAssetBank::new_empty(cache_path.to_str().unwrap(), hdr)
+        SoundAssetBank::new_empty(cache_name, hdr)
     };
     let cache_valid = fs::metadata(&cache_path)
         .map(|metadata| bank.is_sane(metadata.len() as i64).is_ok())
@@ -146,21 +147,26 @@ pub fn update_bank(
         }
     }
 
+    let unchanged = match validation.reused() {
+        0 => String::new(),
+        reused => format!(" ({reused} sources unchanged, per the NTFS journal)"),
+    };
     let no_changes = to_add.is_empty() && to_remove.is_empty();
     if no_changes {
         if !cache_valid {
-            println!("  {}.{}: create empty", base_name, ext);
+            println!("  {}.{}: create empty{}", base_name, ext, unchanged);
             bank.write_current(platform.converted_asset_version, false)?;
         } else {
-            println!("  {}.{}: up to date", base_name, ext);
+            println!("  {}.{}: up to date{}", base_name, ext, unchanged);
         }
     } else {
         println!(
-            "  {}.{}: +{} / -{}",
+            "  {}.{}: +{} / -{}{}",
             base_name,
             ext,
             to_add.len(),
-            to_remove.len()
+            to_remove.len(),
+            unchanged
         );
 
         let mut obtainer = PreConvertedObtainer { converted };

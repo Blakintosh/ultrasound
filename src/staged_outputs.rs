@@ -18,7 +18,7 @@ struct PublishedFile {
 
 impl StagedOutputs {
     pub fn new(output_root: &Path) -> Result<Self, String> {
-        fs::create_dir_all(output_root).map_err(|e| e.to_string())?;
+        fs::create_dir_all(output_root).map_err(|e| format!("create {}: {}", output_root.display(), e))?;
         loop {
             let id = NEXT_STAGE.fetch_add(1, Ordering::Relaxed);
             let root = output_root.join(format!(".ultrasound-stage-{}-{}", std::process::id(), id));
@@ -127,15 +127,19 @@ impl StagedOutputs {
     }
 }
 
-pub fn files_equal(source: &Path, destination: &Path) -> Result<bool, String> {
-    let mut source = fs::File::open(source).map_err(|e| e.to_string())?;
-    let mut destination = match fs::File::open(destination) {
+fn read_error(path: &Path) -> impl FnOnce(std::io::Error) -> String + '_ {
+    move |e| format!("read {}: {}", path.display(), e)
+}
+
+pub fn files_equal(source_path: &Path, destination_path: &Path) -> Result<bool, String> {
+    let mut source = fs::File::open(source_path).map_err(read_error(source_path))?;
+    let mut destination = match fs::File::open(destination_path) {
         Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(read_error(destination_path)(e)),
     };
-    let length = source.metadata().map_err(|e| e.to_string())?.len();
-    if destination.metadata().map_err(|e| e.to_string())?.len() != length {
+    let length = source.metadata().map_err(read_error(source_path))?.len();
+    if destination.metadata().map_err(read_error(destination_path))?.len() != length {
         return Ok(false);
     }
     let mut left = [0u8; 65536];
@@ -145,10 +149,10 @@ pub fn files_equal(source: &Path, destination: &Path) -> Result<bool, String> {
         let count = remaining.min(left.len() as u64) as usize;
         source
             .read_exact(&mut left[..count])
-            .map_err(|e| e.to_string())?;
+            .map_err(read_error(source_path))?;
         destination
             .read_exact(&mut right[..count])
-            .map_err(|e| e.to_string())?;
+            .map_err(read_error(destination_path))?;
         if left[..count] != right[..count] {
             return Ok(false);
         }
@@ -176,9 +180,10 @@ fn rollback(files: &[PublishedFile]) -> Vec<String> {
 }
 
 fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+    let list_error = |e: std::io::Error| format!("list {}: {}", dir.display(), e);
+    for entry in fs::read_dir(dir).map_err(list_error)? {
+        let entry = entry.map_err(list_error)?;
+        if entry.file_type().map_err(list_error)?.is_dir() {
             collect_files(&entry.path(), files)?;
         } else {
             files.push(entry.path());

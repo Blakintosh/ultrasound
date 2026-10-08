@@ -102,7 +102,7 @@ def main():
                                 stream.write(bytes([value ^ 1]))
                         measured = measure(project, scenario)
                         if args.require_journal_hits and name == "candidate":
-                            actual = sum(map(int, re.findall(r"source validation: (\d+) journal hits", measured["stdout"])))
+                            actual = sum(map(int, re.findall(r"\((\d+) sources unchanged, per the NTFS journal\)", measured["stdout"])))
                             expected = {"clean": 0, "warm": args.assets + 6, "single_edit": args.assets + 5}[scenario]
                             require(actual == expected, f"{scenario}: expected {expected} journal hits, got {actual}")
                             measured["journal_hits"] = actual

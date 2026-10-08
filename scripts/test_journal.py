@@ -25,7 +25,7 @@ def main():
         source = project.root / "sound_assets/tone.wav"
 
         def hits(result):
-            return sum(map(int, re.findall(r"source validation: (\d+) journal hits", result.stdout)))
+            return sum(map(int, re.findall(r"\((\d+) sources unchanged, per the NTFS journal\)", result.stdout)))
 
         def compare(label, success=True, expect_hits=None):
             project.exe = candidate

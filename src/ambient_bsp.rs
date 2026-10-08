@@ -65,7 +65,7 @@ impl AmbientBsp {
     pub fn from_file(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path)
             .map_err(|e| format!("read map {}: {}", path.display(), e))?;
-        Self::from_text(&text)
+        Self::from_text(&text).map_err(|e| format!("map {}: {}", path.display(), e))
     }
 
     /// Build from already-loaded `.map` text. Walks every entity, filters to
