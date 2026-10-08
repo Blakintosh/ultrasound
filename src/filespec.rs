@@ -14,12 +14,11 @@ pub struct ResolvedFile {
     pub target_name: String,
 }
 
-/// Resolve `file_spec` (a path relative to the asset root) to a list of .wav
-/// source files, each with a deterministic target filename.
+/// Resolve `file_spec` (a path relative to the asset root) to a list of WAV,
+/// FLAC or OGG source files, each with a deterministic target filename.
 ///
-/// v1 limitations:
-/// - no wildcards; a filespec either resolves to a single file or to every
-///   `*.wav` inside a directory (the "dir enumeration" case).
+/// There are no wildcards: a filespec resolves either to a single file or to
+/// every supported file directly inside a directory.
 pub fn expand(
     env: &Env,
     alias: &RowAlias,
@@ -77,15 +76,17 @@ pub fn expand(
     Ok(out)
 }
 
-fn is_supported_audio_ext(ext: Option<&str>) -> bool {
-    matches!(ext, Some("wav") | Some("flac") | Some("ogg"))
+fn is_supported_audio(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ["wav", "flac", "ogg"].iter().any(|s| e.eq_ignore_ascii_case(s)))
 }
 
 /// If `full` is a supported audio file, return [full]. If it's a directory,
 /// return every supported audio file inside it (non-recursive). Otherwise, empty.
 fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     if full.is_file() {
-        if is_supported_audio_ext(full.extension().and_then(|s| s.to_str())) {
+        if is_supported_audio(full) {
             return Ok(vec![full.to_path_buf()]);
         }
         return Ok(Vec::new());
@@ -99,8 +100,8 @@ fn enumerate_sources(full: &Path) -> Result<Vec<PathBuf>, String> {
     {
         let entry = entry.map_err(|e| format!("read_dir entry error: {}", e))?;
         let path = entry.path();
-        if is_supported_audio_ext(path.extension().and_then(|s| s.to_str())) {
-            if path.to_string_lossy().contains(' ') {
+        if is_supported_audio(&path) {
+            if entry.file_name().to_string_lossy().contains(' ') {
                 return Err(format!("filename contains a space: {}", path.display()));
             }
             files.push(path);
@@ -123,11 +124,17 @@ fn build_target_name(
     let storage = alias
         .storage
         .as_ref()
-        .ok_or_else(|| format!("alias '{}' missing Storage", alias.name))?;
-    let looping = looping_override.unwrap_or_else(|| alias.looping.as_ref().unwrap());
+        .ok_or_else(|| "missing Storage".to_string())?;
+    let looping = match looping_override {
+        Some(looping) => looping,
+        None => alias
+            .looping
+            .as_ref()
+            .ok_or_else(|| "missing Looping".to_string())?,
+    };
     let compression = alias
         .compression
-        .ok_or_else(|| format!("alias '{}' missing Compression", alias.name))?;
+        .ok_or_else(|| "missing Compression".to_string())?;
 
     let scaled = language.scale_compression(platform.scale_compression(compression));
 
@@ -211,4 +218,32 @@ fn strip_asset_root_prefix(env: &Env, path: &Path, language: &str) -> PathBuf {
         s = &s[1..];
     }
     PathBuf::from(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enumeration_ignores_case_and_spaces_above_the_folder() {
+        let root = std::env::temp_dir().join(format!("ultrasound filespec {}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("Call of Duty Black Ops III/sound_assets/zm");
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["b.WAV", "a.flac", "c.Ogg", "notes.txt"] {
+            std::fs::write(dir.join(name), b"").unwrap();
+        }
+
+        let names = |paths: Vec<PathBuf>| -> Vec<String> {
+            paths.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect()
+        };
+        assert_eq!(names(enumerate_sources(&dir).unwrap()), ["a.flac", "b.WAV", "c.Ogg"]);
+        assert_eq!(names(enumerate_sources(&dir.join("b.WAV")).unwrap()), ["b.WAV"]);
+        assert!(enumerate_sources(&dir.join("notes.txt")).unwrap().is_empty());
+
+        std::fs::write(dir.join("has space.wav"), b"").unwrap();
+        let err = enumerate_sources(&dir).unwrap_err();
+        assert!(err.contains("has space.wav"), "{err}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

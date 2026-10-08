@@ -249,7 +249,8 @@ impl SoundZone {
                             language_ref,
                             spec,
                             override_loop.clone(),
-                        )?;
+                        )
+                        .map_err(|e| format!("alias '{}': {}", alias.name, e))?;
 
                         // Populate FileSource / FileTarget on the alias row so
                         // the emitted .sz binds the alias to its encoded asset.
