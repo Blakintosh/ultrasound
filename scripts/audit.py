@@ -91,7 +91,7 @@ class Project:
         return self.root / f"pc/{directory}/audit.{lang}.{ext}"
 
     def run(self, label, success=True, languages=("all", "en", "fr")):
-        command = [str(self.exe), "pc", "pc", "unused", "sound_zone", "project", "audit", *languages]
+        command = [str(self.exe), "--verbose", "pc", "pc", "unused", "sound_zone", "project", "audit", *languages]
         env = dict(os.environ, TA_GAME_PATH=str(self.root), TA_TOOLS_PATH=str(self.root / "tools"))
         start = time.perf_counter()
         result = subprocess.run(command, env=env, cwd=self.root, capture_output=True, text=True, timeout=120)

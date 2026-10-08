@@ -37,12 +37,13 @@ use update_bank::update_bank;
 
 const RAW_ARG_USAGE: &str = "Expected raw args: <platform> <platform_working_dir> <unused> <action> <source_dir> [action args...]";
 
-/// Ultrasound: the Black Ops III Mod Tools' sound converter, rebuilt. The Mod Tools run it as
-/// `sound/snd_convert.exe`; it isn't usually run by hand.
+/// The Black Ops III Mod Tools' sound converter, rebuilt.
+///
+/// The Linker runs it as `sound\snd_convert.exe`; you don't usually run it yourself.
 #[derive(Parser)]
 #[command(name = "Ultrasound", version)]
 struct Args {
-    /// Accepted for compatibility with the Mod Tools; has no effect
+    /// Also report how many sources were confirmed unchanged without being read
     #[arg(long)]
     verbose: bool,
 
@@ -54,9 +55,13 @@ struct Args {
     #[arg(long, hide = true)]
     update: bool,
 
-    /// Raw positional arguments from mod tools
+    /// The arguments the Linker passes: <platform> <platform_working_dir> <unused> <action>
+    /// <source_dir> [action args...]
     raw_args: Vec<String>,
 }
+
+/// Set by `--verbose`.
+pub static VERBOSE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Debug)]
 enum Action {
@@ -90,6 +95,9 @@ fn try_main() -> Result<(), String> {
         self_update::run_update();
         return Ok(());
     }
+    let started = std::time::Instant::now();
+    VERBOSE.store(args.verbose, std::sync::atomic::Ordering::Relaxed);
+    println!("Ultrasound {}", env!("CARGO_PKG_VERSION"));
     self_update::on_start();
 
     let (platform_working_dir, source_dir) = env_args(&args.raw_args)?;
@@ -100,6 +108,7 @@ fn try_main() -> Result<(), String> {
     let action = parse_action(&snapshot, &args.raw_args)?;
 
     run(&mut snapshot, action)?;
+    println!("Done in {:.1} s", started.elapsed().as_secs_f64());
     self_update::after_success();
     Ok(())
 }

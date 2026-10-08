@@ -143,7 +143,7 @@ class Sandbox:
 
     def notices(self, result):
         return [line for line in result.stdout.splitlines()
-                if line.startswith(("Ultrasound ", "Couldn't install Ultrasound "))]
+                if line.startswith(("Ultrasound ", "Couldn't install Ultrasound ")) and line != f"Ultrasound {VERSION}"]
 
     def files(self):
         return {p.name: p.read_bytes() for p in sorted(self.sound.iterdir())}

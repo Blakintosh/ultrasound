@@ -59,7 +59,8 @@ python scripts/test_journal.py --reference target/audit/pre-journal/ultrasound.e
 Without a reference argument, the script compares the candidate's journal path
 with its forced-hashing path. With a reference, it compares against that binary.
 Both compare independently parsed bank metadata, encoded payload hashes and
-sidecars, and require real cache hits. CI runs the first command after the audit.
+sidecars, and require real cache hits, which builds report on each bank line when run
+with `--verbose`. CI runs the first command after the audit.
 
 The cases include timestamp-preserving edits, older replacements, hard links,
 open writers, repeated mapped writes after the original file handle closes,

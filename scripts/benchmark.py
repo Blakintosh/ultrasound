@@ -24,7 +24,7 @@ class MemoryCounters(ctypes.Structure):
 
 
 def measure(project, label):
-    command = [str(project.exe), "pc", "pc", "unused", "sound_zone", "project", "audit", "all"]
+    command = [str(project.exe), "--verbose", "pc", "pc", "unused", "sound_zone", "project", "audit", "all"]
     env = dict(os.environ, TA_GAME_PATH=str(project.root), TA_TOOLS_PATH=str(project.root / "tools"))
     peak = None
     start = time.perf_counter()

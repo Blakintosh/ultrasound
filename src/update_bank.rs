@@ -139,8 +139,10 @@ pub fn update_bank(
     }
 
     let unchanged = match validation.reused() {
-        0 => String::new(),
-        reused => format!(" ({reused} sources unchanged, per the NTFS journal)"),
+        reused if reused > 0 && crate::VERBOSE.load(std::sync::atomic::Ordering::Relaxed) => {
+            format!(" ({reused} sources unchanged, per the NTFS journal)")
+        }
+        _ => String::new(),
     };
     let no_changes = to_add.is_empty() && to_remove.is_empty();
     if no_changes {
