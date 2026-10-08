@@ -14,6 +14,7 @@ mod music;
 mod obtainer;
 mod ogg;
 mod riff;
+mod self_update;
 mod sound_data_snapshot;
 mod sound_zone;
 mod sound_zone_config;
@@ -47,6 +48,10 @@ struct Args {
     #[arg(long)]
     skip_deps: bool,
 
+    /// Internal: check for and install an update, started in the background
+    #[arg(long, hide = true)]
+    update: bool,
+
     /// Raw positional arguments from mod tools
     raw_args: Vec<String>,
 }
@@ -79,6 +84,12 @@ fn main() {
 
 fn try_main() -> Result<(), String> {
     let args = Args::parse();
+    if args.update {
+        self_update::run_update();
+        return Ok(());
+    }
+    self_update::on_start();
+
     let (platform_working_dir, source_dir) = env_args(&args.raw_args)?;
 
     let env = Env::new(platform_working_dir, source_dir)?;
@@ -86,7 +97,9 @@ fn try_main() -> Result<(), String> {
 
     let action = parse_action(&snapshot, &args.raw_args)?;
 
-    run(&mut snapshot, action)
+    run(&mut snapshot, action)?;
+    self_update::after_success();
+    Ok(())
 }
 
 fn env_args(raw: &[String]) -> Result<(&str, &str), String> {

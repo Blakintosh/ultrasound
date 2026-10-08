@@ -20,6 +20,10 @@ For the changelogs (including latest version), see [CHANGELOG.md](https://github
 
 Navigate to the [Releases](https://github.com/Blakintosh/ultrasound/releases) tab to download the latest release. From here, the `README.md` inside the release will guide you through the installation process.
 
+## Updates
+
+Ultrasound keeps itself up to date. At most once a day, after a successful sound build, it checks GitHub for a newer release in the background, verifies the download against the release's SHA-256 digest, and replaces `snd_convert.exe` and `libFLAC.dll` in place; your build never waits for it. The next build's log says `Ultrasound updated to X.Y.Z`, or `Ultrasound X.Y.Z is available` with a link if the update couldn't be installed (for example, if the `sound` folder isn't writable). Its update state lives in `%LOCALAPPDATA%\gscode\ultrasound`, not in the game folder.
+
 ## Issues
 
 For the v1 regression audit, fixture setup, and change-review procedure, see

@@ -1,3 +1,7 @@
+### Unreleased
+
+* Added background auto-update. After a successful build, at most once a day, Ultrasound checks for a newer release, verifies its SHA-256 digest and swaps in the new `snd_convert.exe` and `libFLAC.dll` without holding up the build. The next build logs the update, or that a new version is available if it couldn't be installed.
+
 ### Version 0.3 (latest)
 
 * Added emitting .sz files used by Linker, as well as ambientgeometry.json files.
