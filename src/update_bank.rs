@@ -6,25 +6,13 @@ use rayon::prelude::*;
 
 use crate::bank::bank_header::BankHeader;
 use crate::bank::sound_asset_bank::SoundAssetBank;
+use crate::checksum::Checksum;
 use crate::converter::{SoundAssetBankConvertedAsset, convert_source_data};
 use crate::obtainer::SoundAssetObtainer;
 use crate::sound_data_snapshot::SoundDataSnapshot;
 use crate::sound_zone::SoundZone;
-use crate::source_asset_cache::Checksum;
 use crate::string_hash;
 use crate::sz_writer;
-
-/// Soft cap on a loaded bank (`.sabl`). Exact engine limit is unknown;
-/// 600 MB is a conservative guess used only to surface a warning.
-#[cfg(any())]
-const SABL_LIMIT_BYTES: u64 = 600 * 1_000 * 1_000;
-/// Soft cap on a streamed bank (`.sabs`). Exact engine limit is unknown.
-#[cfg(any())]
-const SABS_LIMIT_BYTES: u64 = 4 * 1_000 * 1_000 * 1_000;
-/// Percent-of-limit at which we print a warning with a compression-tuning
-/// hint.
-#[cfg(any())]
-const BANK_WARN_THRESHOLD_PCT: u64 = 85;
 
 /// Build (or update) a bank file for one zone+platform+language+storage-class.
 /// Runs once for the loaded bank (`streamed=false`, `.sabl`) and once for the
@@ -180,7 +168,7 @@ pub fn update_bank(
         )?;
     }
 
-    // 4. Deploy cache → ship (covers a missing ship copy on otherwise warm
+    // 3. Deploy cache → ship (covers a missing ship copy on otherwise warm
     //    runs as well as the post-modify path).
     let deployed_path = snapshot.env.get_deploy_bank_dir(&language.deploy_name)
         .join(format!("{}.{}", base_name, ext));
@@ -188,8 +176,8 @@ pub fn update_bank(
         deploy(&cache_path, &ship_path)?;
     }
 
-    // 5. Loaded-bank sidecars. Only the loaded variant emits these; the
-    //    streamed bank doesn't have an asset/memory manifest in baseline.
+    // 4. Loaded-bank sidecars. Only the loaded variant emits these; the
+    //    streamed bank has no asset/memory manifest.
     //    Always re-emit to keep the files consistent with the bank on disk
     //    even when nothing changed (e.g. the manifest was deleted by hand).
     if !streamed {
@@ -207,61 +195,7 @@ pub fn update_bank(
         sz_writer::write_assets_list(&path_for("assets"), &names)?;
     }
 
-    // Bank size warnings are disabled until the real limits are known.
     validation.save(&validation_path);
-    // check_bank_size(&cache_path, streamed, &base_name, ext, source_map)?;
-    Ok(())
-}
-
-/// Warn if the bank is within the warn threshold of its (soft) size cap.
-/// The exact engine limit isn't known, so this never errors — it just
-/// surfaces a hint so the user can tune DefaultAudioCompression before
-/// they hit a wall in-game.
-#[cfg(any())]
-fn check_bank_size(
-    cache_path: &PathBuf,
-    streamed: bool,
-    base_name: &str,
-    ext: &str,
-    source_map: &HashMap<String, SoundAssetBankSourceAsset>,
-) -> Result<(), String> {
-    let size = match fs::metadata(cache_path) {
-        Ok(m) => m.len(),
-        Err(_) => return Ok(()),
-    };
-    if size == 0 {
-        return Ok(());
-    }
-
-    let limit = if streamed {
-        SABS_LIMIT_BYTES
-    } else {
-        SABL_LIMIT_BYTES
-    };
-    let pct = size.saturating_mul(100) / limit;
-    if pct < BANK_WARN_THRESHOLD_PCT {
-        return Ok(());
-    }
-
-    let max_level = source_map
-        .values()
-        .map(|src| src.compression_level)
-        .max()
-        .unwrap_or(CompressionLevel::None);
-
-    if max_level == CompressionLevel::Extreme {
-        return Ok(());
-    }
-
-    eprintln!(
-        "^3warning: {}.{} is at {}% ({:.1} MB) of the {} MB estimated maximum safe bank size. highest compression level in use is {:?}; consider raising DefaultAudioCompression in the .szc, or tweak individual aliases",
-        base_name,
-        ext,
-        pct,
-        size as f64 / 1_000_000.0,
-        limit / 1_000_000,
-        max_level
-    );
     Ok(())
 }
 
@@ -284,9 +218,5 @@ impl SoundAssetObtainer for PreConvertedObtainer {
         self.converted
             .remove(name)
             .ok_or_else(|| format!("obtainer: no pre-converted asset for '{}'", name))
-    }
-
-    fn fatal_error(&self) -> bool {
-        false
     }
 }

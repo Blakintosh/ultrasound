@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+// The field set mirrors the .duk file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct Duck {
     #[serde(rename = "Name")]
@@ -42,6 +44,8 @@ fn default_true() -> bool {
     true
 }
 
+// The field set mirrors the .duk file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct DuckValue {
     #[serde(rename = "Name")]

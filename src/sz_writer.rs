@@ -66,8 +66,7 @@ pub fn write_name_list(path: &Path, names: &BTreeSet<String>) -> Result<(), Stri
         buf.push_str(n);
         buf.push_str("\r\n");
     }
-    // Strip the trailing CRLF — baseline `string.Join(NewLine, ...)` doesn't
-    // emit a terminator on the last entry.
+    // Strip the trailing CRLF: the last entry has no line terminator.
     if buf.ends_with("\r\n") {
         buf.truncate(buf.len() - 2);
     }
@@ -79,7 +78,7 @@ pub fn write_plain_text(path: &Path, body: &str) -> Result<(), String> {
 }
 
 /// Write the loaded-bank assets list: one converted-asset name per line, no
-/// header. Order matches `bank.get_files()` to match baseline behavior.
+/// header, in `bank.get_files()` order.
 pub fn write_assets_list(path: &Path, names: &[&str]) -> Result<(), String> {
     let mut buf = String::with_capacity(names.iter().map(|n| n.len() + 2).sum::<usize>());
     for (i, n) in names.iter().enumerate() {
@@ -91,8 +90,8 @@ pub fn write_assets_list(path: &Path, names: &[&str]) -> Result<(), String> {
     write_text_crlf(path, &buf)
 }
 
-/// Build a `csv::Writer` configured to match the baseline byte layout: no
-/// quoting unless required, CRLF terminators.
+/// Build a `csv::Writer` configured for the .sz byte layout: no quoting
+/// unless required, CRLF terminators.
 fn open_csv(path: &Path) -> Result<csv::Writer<std::fs::File>, String> {
     ensure_parent(path)?;
     WriterBuilder::new()
@@ -109,10 +108,10 @@ fn finish_csv(w: csv::Writer<std::fs::File>, path: &Path) -> Result<(), String> 
         .map_err(|e| format!("sync csv {}: {}", path.display(), e))
 }
 
-/// Column headers + per-row cells for `RowAlias`. Order matches the baseline
-/// `RowAlias` declaration so downstream consumers don't have to reorder.
-/// `CompressionLevel` is intentionally omitted: it's a Rust addition that the
-/// baseline schema does not carry.
+/// Column headers + per-row cells for `RowAlias`, in the column order the
+/// Mod Tools expect in alias.sz. `CompressionLevel` is intentionally
+/// omitted: it's an Ultrasound-only input column that alias.sz does not
+/// carry.
 const ALIAS_COLUMNS: &[&str] = &[
     "Name",
     "Behavior",
@@ -365,9 +364,7 @@ const REVERB_COLUMNS: &[&str] = &[
     "FarDecayTime",
     "FarSmear",
     "FarPreDelayMs",
-    // Inherited Row metadata. Baseline emits these on every row table even
-    // though our struct doesn't currently track them — see comment above
-    // `ALIAS_COLUMNS` for the same reason.
+    // Row-source metadata: which CSV file and line the row came from.
     "RowSourceFileName",
     "RowSourceShortName",
     "RowSourceLineNumber",
@@ -731,8 +728,8 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
 
         /// `zm_karelia.all.ducklist.sz` baseline holds 11 duck names sorted
         /// alphabetically under `Name`. Reproducing it directly from the
-        /// reference makes this test independent of the upstream alias /
-        /// ambient resolution that originally produced the list.
+        /// reference makes this test independent of the alias / ambient
+        /// resolution that produces the list in a real build.
         #[test]
         #[ignore = "external fixtures: see docs/testing.md"]
         fn ducklist() {
@@ -874,15 +871,14 @@ alias_explicit,no,no,no,left_player,custom_curve,123,2.5
 
         /// `reverb.sz` parity — structural rather than byte-equal:
         /// * The reference contains duplicate rows for reverbs referenced
-        ///   by multiple ambients (baseline `reverbs.Add` re-pushes the
-        ///   same row each time). Our test writes one row per source
+        ///   by multiple ambients. This test writes one row per source
         ///   reverb, so row counts differ.
-        /// * Our `RowReverb` struct doesn't track `RowSourceFileName` /
-        ///   `RowSourceShortName` / `RowSourceLineNumber`, so those
-        ///   columns come through empty.
+        /// * This test loads the reverbs without row-source metadata, so
+        ///   `RowSourceFileName` / `RowSourceShortName` /
+        ///   `RowSourceLineNumber` come through empty.
         /// What this test *does* prove: header order matches, column
         /// count matches, and every numeric cell formats byte-identically
-        /// to baseline (catches f32 → string drift like `0` vs `0.0`,
+        /// to the reference (catches f32 → string drift like `0` vs `0.0`,
         /// `5.1` vs `5.099999`, `-13` vs `-13.0`).
         #[test]
         #[ignore = "external fixtures: see docs/testing.md"]

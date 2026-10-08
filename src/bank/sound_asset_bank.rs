@@ -5,9 +5,9 @@ use std::path::Path;
 
 use crate::{
     bank::{bank_entry::BankEntry, bank_header::BankHeader},
-    converter::{AliasLooping, AssetFormat, SoundAssetBankConvertedAsset},
+    checksum::Checksum,
+    converter::{AliasLooping, AssetFormat},
     obtainer::SoundAssetObtainer,
-    source_asset_cache::Checksum,
     string_hash,
 };
 
@@ -87,19 +87,9 @@ impl SoundAssetBank {
         self.header.is_sane(size)
     }
 
-    /// Gets the file name of this bank.
-    pub fn get_file_name(&self) -> &str {
-        &self.file_name
-    }
-
     /// Gets the bank files contained in this bank.
     pub fn get_files(&self) -> &[SoundAssetBankFile] {
         &self.bank_files
-    }
-
-    /// Sets the dependencies of this bank.
-    pub fn set_dependencies(&mut self, dependencies: &[&str]) -> Result<(), String> {
-        self.header.set_dependencies(&self.file_name, dependencies)
     }
 
     pub fn set_zone_name(&mut self, name: &str) {
@@ -114,40 +104,41 @@ impl SoundAssetBank {
         self.header.set_language(language);
     }
 
+    #[cfg(test)]
     pub fn get_asset(
         &self,
         converted_name: &str,
-    ) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
+    ) -> Result<(crate::converter::SoundAssetBankConvertedAsset, Vec<u8>), String> {
         let file_index = self
-            .find_file_index(converted_name)
+            .bank_file_index
+            .get(converted_name)
             .ok_or_else(|| format!("Could not find file {} in the bank.", converted_name))?;
 
         let bank_file = &self.bank_files[*file_index];
 
-        let asset = SoundAssetBankConvertedAsset::new(
-            &bank_file.name,
-            bank_file.converted_checksum,
-            bank_file.source_checksum,
-            match bank_file.entry.format {
+        let asset = crate::converter::SoundAssetBankConvertedAsset {
+            converted_checksum: bank_file.converted_checksum,
+            source_checksum: bank_file.source_checksum,
+            format: match bank_file.entry.format {
                 0 => AssetFormat::SndAssetFormatPcms16,
                 8 => AssetFormat::SndAssetFormatFlac,
                 other => return Err(format!("Unknown asset format: {}", other)),
             },
-            if bank_file.entry.looping == 1 {
+            looping: if bank_file.entry.looping == 1 {
                 AliasLooping::Looping
             } else {
                 AliasLooping::NonLooping
             },
-            bank_file.entry.frame_count as i64,
-            bank_file.entry.get_frame_rate(),
-            bank_file.entry.channel_count as i32,
-            bank_file.entry.envelope_loudness0,
-            bank_file.entry.envelope_loudness1,
-            bank_file.entry.envelope_loudness2,
-            bank_file.entry.envelope_loudness3,
-            bank_file.entry.envelope_time1,
-            bank_file.entry.envelope_time2,
-        );
+            frame_count: bank_file.entry.frame_count as i64,
+            frame_rate: bank_file.entry.get_frame_rate(),
+            channel_count: bank_file.entry.channel_count as i32,
+            envelope_loudness0: bank_file.entry.envelope_loudness0,
+            envelope_loudness1: bank_file.entry.envelope_loudness1,
+            envelope_loudness2: bank_file.entry.envelope_loudness2,
+            envelope_loudness3: bank_file.entry.envelope_loudness3,
+            envelope_time1: bank_file.entry.envelope_time1,
+            envelope_time2: bank_file.entry.envelope_time2,
+        };
         let offset = bank_file.entry.offset;
         let size = bank_file.entry.size as usize;
         let mut file = File::open(&self.file_name)
@@ -197,10 +188,6 @@ impl SoundAssetBank {
         self.write_header(&mut file)?;
 
         Ok(())
-    }
-
-    fn find_file_index(&self, converted_name: &str) -> Option<&usize> {
-        self.bank_file_index.get(converted_name)
     }
 
     /// Returns the total number of unused bytes between the header and packed
@@ -310,9 +297,6 @@ impl SoundAssetBank {
             let mut writer = BufWriter::with_capacity(4 * 1024 * 1024, &mut *file);
             for name in sorted {
                 let (asset, data) = converter.get_asset(name)?;
-                if converter.fatal_error() {
-                    return Ok(());
-                }
 
                 let format_byte = match asset.format {
                     AssetFormat::SndAssetFormatPcms16 => 0,

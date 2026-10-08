@@ -65,12 +65,6 @@ pub struct RowReverb {
     pub row_source_line_number: Option<i32>,
 }
 
-impl crate::tables::Row for RowReverb {
-    fn get_row_name(&self) -> &str {
-        &self.name
-    }
-}
-
 pub fn load_reverb_table_with_metadata(path: &Path) -> Result<Vec<RowReverb>, String> {
     let mut rows: Vec<RowReverb> = load_table_relaxed(path)?;
     let source_file = std::fs::canonicalize(path)

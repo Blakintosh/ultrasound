@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use std::str::FromStr;
@@ -8,11 +7,11 @@ use serde::Deserialize;
 use crate::{
     asset_types::AssetEnvelope,
     bank::bank_entry::BankEntry,
+    checksum::Checksum,
     decoded_audio::DecodedAudio,
     flac, ogg,
     riff::Riff,
-    source_asset_cache::Checksum,
-    tables::{row_locale::RowLocale, row_platform::RowPlatform},
+    tables::row_platform::RowPlatform,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -29,6 +28,9 @@ pub enum AliasStorage {
 }
 
 pub enum AssetFormat {
+    // Bank format byte 0. Ultrasound only ever writes FLAC; tests read PCM
+    // entries back from existing banks.
+    #[allow(dead_code)]
     SndAssetFormatPcms16 = 0,
     SndAssetFormatFlac = 8,
 }
@@ -144,15 +146,11 @@ pub struct SoundAssetBankSourceAsset {
     pub source_name: String,
     pub looping: AliasLooping,
     pub storage: AliasStorage,
-    pub compression: i32,
     pub compression_level: CompressionLevel,
-    pub locale: RowLocale,
     pub platform: RowPlatform,
-    pub converted_name: String,
 }
 
 pub struct SoundAssetBankConvertedAsset {
-    pub name: String,
     pub converted_checksum: Checksum,
     pub source_checksum: Checksum,
     pub format: AssetFormat,
@@ -166,63 +164,6 @@ pub struct SoundAssetBankConvertedAsset {
     pub envelope_loudness3: u8,
     pub envelope_time1: u16,
     pub envelope_time2: u16,
-}
-
-impl SoundAssetBankConvertedAsset {
-    pub fn new(
-        name: &str,
-        converted_checksum: Checksum,
-        source_checksum: Checksum,
-        format: AssetFormat,
-        looping: AliasLooping,
-        frame_count: i64,
-        frame_rate: i32,
-        channel_count: i32,
-        envelope_loudness0: u8,
-        envelope_loudness1: u8,
-        envelope_loudness2: u8,
-        envelope_loudness3: u8,
-        envelope_time1: u16,
-        envelope_time2: u16,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            converted_checksum,
-            source_checksum,
-            format,
-            looping,
-            frame_count,
-            frame_rate,
-            channel_count,
-            envelope_loudness0,
-            envelope_loudness1,
-            envelope_loudness2,
-            envelope_loudness3,
-            envelope_time1,
-            envelope_time2,
-        }
-    }
-}
-
-/// Single-pass source → converted asset. Reads the source file exactly once,
-/// computes source checksum + decode + envelope + resample + FLAC encode from
-/// the same buffer. Supports both WAV and FLAC input.
-pub fn convert_source_inline(
-    asset: &SoundAssetBankSourceAsset,
-) -> Result<(SoundAssetBankConvertedAsset, Vec<u8>), String> {
-    if asset.platform.platform != "pc" {
-        return Err(format!("Unsupported platform: {}", asset.platform.platform));
-    }
-
-    let data = fs::read(&asset.source_name)
-        .map_err(|e| format!("Failed to read file {}: {}", asset.source_name, e))?;
-    // Recipe-aware source checksum: mixes the file bytes with the level's
-    // compression fingerprint so retuning (or reassigning) a level
-    // invalidates the matching bank entry on the next run.
-    let source_checksum =
-        Checksum::from_data_with_recipe(&data, &asset.compression_level.recipe_fingerprint());
-
-    convert_source_data(asset, data, source_checksum)
 }
 
 pub fn convert_source_data(
@@ -297,20 +238,21 @@ pub fn convert_source_data(
         AssetEnvelope::envelope_extract(audio.frame_count, audio.channel_count, &audio.samples);
 
     // Resample + FLAC encode. Empty audio → empty FLAC payload.
+    let converted_frame_count = if audio.frame_rate != 48000 {
+        audio.frame_count * 48000 / audio.frame_rate as u64
+    } else {
+        audio.frame_count
+    };
     let flac_out = if audio.frame_count == 0 {
         Vec::new()
     } else {
-        let mut frame_rate = audio.frame_rate as i32;
-        let mut frame_count = audio.frame_count as i32;
-        let mut pcm = if frame_rate != 48000 {
-            frame_count = (audio.frame_count * 48000 / frame_rate as u64) as i32;
-            let resampled = Riff::resize(
+        let frame_count = converted_frame_count as i32;
+        let mut pcm = if audio.frame_rate != 48000 {
+            Riff::resize(
                 &audio.samples,
                 audio.channel_count as u32,
                 frame_count as u32,
-            );
-            frame_rate = 48000;
-            resampled
+            )
         } else {
             audio.samples
         };
@@ -338,29 +280,19 @@ pub fn convert_source_data(
         flac::encode(
             &asset.source_name,
             audio.channel_count as i32,
-            frame_rate,
+            48000,
             frame_count,
             &pcm,
         )?
     };
 
-    let converted_frame_count = if audio.frame_rate != 48000 {
-        (audio.frame_count * 48000 / audio.frame_rate as u64) as i64
-    } else {
-        audio.frame_count as i64
-    };
-
     Ok((
         SoundAssetBankConvertedAsset {
-            name: asset.converted_name.clone(),
             converted_checksum: Checksum::from_data(&flac_out),
             source_checksum,
             format: AssetFormat::SndAssetFormatFlac,
-            looping: match asset.looping {
-                AliasLooping::Looping => AliasLooping::Looping,
-                AliasLooping::NonLooping => AliasLooping::NonLooping,
-            },
-            frame_count: converted_frame_count,
+            looping: asset.looping,
+            frame_count: converted_frame_count as i64,
             frame_rate: 48000,
             channel_count: audio.channel_count as i32,
             envelope_loudness0: envelope.left[0] as u8,

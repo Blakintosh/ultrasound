@@ -1,11 +1,6 @@
-use crate::units;
-use std::{
-    fs::File,
-    io::{BufReader, Cursor, Read, Seek, SeekFrom},
-};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 pub struct Riff {
-    pub file_name: String,
     pub frame_rate: u32,
     pub channel_count: u16,
     pub frame_count: u64,
@@ -16,25 +11,9 @@ pub struct Riff {
 }
 
 impl Riff {
-    pub fn load(file_name: &str) -> Result<Self, String> {
-        let mut file = File::open(file_name)
-            .map_err(|e| format!("Failed to open file {}: {}", file_name, e))?;
-
-        Riff::load_from_file(file_name, &mut file)
-    }
-
-    pub fn load_from_file(file_name: &str, input: &mut File) -> Result<Self, String> {
-        let metadata = input
-            .metadata()
-            .map_err(|e| format!("Failed to get metadata for file {}: {}", file_name, e))?;
-        let length = metadata.len();
-        let mut reader = BufReader::new(input);
-        Self::parse_core(file_name, &mut reader, length)
-    }
-
-    /// Parse RIFF headers from an in-memory buffer. Equivalent to `load_from_file`
-    /// but skips re-opening the file. Pair with `decode_interleaved_s16_from_slice`
-    /// for a full single-read pipeline.
+    /// Parse RIFF headers from an in-memory buffer. Pair with
+    /// `decode_interleaved_s16_from_slice` to decode the samples from the same
+    /// buffer.
     pub fn parse(file_name: &str, data: &[u8]) -> Result<Self, String> {
         let length = data.len() as u64;
         let mut cursor = Cursor::new(data);
@@ -151,7 +130,6 @@ impl Riff {
         })?;
 
         Ok(Riff {
-            file_name: file_name.to_string(),
             frame_rate,
             channel_count,
             frame_count: data_chunk_size / frame_size as u64,
@@ -162,15 +140,8 @@ impl Riff {
         })
     }
 
-    pub fn load_interleaved_s16(&self) -> Result<Vec<i16>, String> {
-        let mut file = File::open(&self.file_name)
-            .map_err(|e| format!("Failed to open file {}: {}", self.file_name, e))?;
-
-        self.load_interleaved_s16_from_file(&mut file, 0, self.frame_count)
-    }
-
     /// Decode PCM samples directly from an in-memory WAV buffer (paired with
-    /// `Riff::parse`). Avoids reopening the file.
+    /// `Riff::parse`).
     pub fn decode_interleaved_s16_from_slice(&self, data: &[u8]) -> Result<Vec<i16>, String> {
         let start = self.data_byte_offset as usize;
         let declared_end = start + self.data_chunk_size as usize;
@@ -190,98 +161,6 @@ impl Riff {
             out.push(0);
         }
         Ok(out)
-    }
-
-    pub fn load_interleaved_s16_from_file(
-        &self,
-        input: &mut File,
-        start_frame: u64,
-        frame_count: u64,
-    ) -> Result<Vec<i16>, String> {
-        let mut reader = BufReader::new(input);
-
-        let byte_count = self.get_data_length(frame_count);
-        // Seek to the start data offset.
-        reader
-            .seek(SeekFrom::Start(self.get_data_offset(start_frame)))
-            .map_err(|e| format!("Failed to seek in file {}: {}", self.file_name, e))?;
-
-        // Read the data into a zero-initialised buffer via a short-read. If
-        // the WAV overstates its data chunk size the tail remains zeroed,
-        // so header/body mismatches seen in the wild resolve to silence
-        // rather than a hard error.
-        let mut buffer = vec![0u8; byte_count as usize];
-        let mut filled = 0usize;
-        while filled < buffer.len() {
-            match reader.read(&mut buffer[filled..]) {
-                Ok(0) => break,
-                Ok(n) => filled += n,
-                Err(e) => {
-                    return Err(format!(
-                        "Failed to read data from file {}: {}",
-                        self.file_name, e
-                    ));
-                }
-            }
-        }
-
-        // Now transform the byte buffer into a i16 buffer.
-        let result: Vec<i16> = buffer
-            .chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-            .collect();
-        Ok(result)
-    }
-
-    pub fn peak_value_db(data: &[i16]) -> f64 {
-        let mut peak = 0.0;
-        for &sample in data {
-            let abs_sample = sample.abs() as f64;
-            if abs_sample > peak {
-                peak = abs_sample;
-            }
-        }
-        units::linear_to_db_fs(peak / 32768.0)
-    }
-
-    pub fn compute_loudness(&self, data: &[i16]) -> (f64, f64, f64) {
-        let peak = Riff::peak_value_db(data);
-        let mut rms = -100000.0;
-
-        for i in 0..self.channel_count {
-            let sample = self.windowed_rms_db(data, i, 0.005f64);
-            if sample > rms {
-                rms = sample;
-            }
-        }
-        (peak, rms, peak - rms)
-    }
-
-    pub fn windowed_rms_db(&self, data: &[i16], channel: u16, window_time: f64) -> f64 {
-        let mut peak_rms = 0.0;
-        let window_size = (window_time * self.frame_rate as f64) as usize;
-        let total_frames = data.len() / self.channel_count as usize;
-
-        if window_size > total_frames {
-            return units::linear_to_db_fs(0.0);
-        }
-
-        let mut offset = 0;
-        while offset + window_size < total_frames {
-            let mut sum_squares = 0.0;
-            for i in 0..window_size {
-                let sample = data[(i + offset) * self.channel_count as usize + channel as usize]
-                    as f64
-                    / 32768.0;
-                sum_squares += sample * sample;
-            }
-            let rms = (sum_squares / window_size as f64).sqrt();
-            if rms > peak_rms {
-                peak_rms = rms;
-            }
-            offset += window_size / 5;
-        }
-        units::linear_to_db_fs(peak_rms)
     }
 
     pub fn resize(input: &[i16], channel_count: u32, output_frame_count: u32) -> Vec<i16> {
@@ -334,13 +213,6 @@ impl Riff {
         result
     }
 
-    fn get_data_offset(&self, start_frame: u64) -> u64 {
-        self.data_byte_offset + self.get_data_length(start_frame)
-    }
-
-    fn get_data_length(&self, frame_count: u64) -> u64 {
-        frame_count * self.channel_count as u64 * 2
-    }
 }
 
 fn read_u32(reader: &mut impl Read, file_name: &str) -> Result<u32, String> {

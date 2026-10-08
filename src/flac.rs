@@ -113,10 +113,6 @@ unsafe extern "C" {
     ) -> i32;
     unsafe fn FLAC__stream_decoder_process_until_end_of_stream(decoder: *mut c_void) -> i32;
     unsafe fn FLAC__stream_decoder_finish(decoder: *mut c_void) -> i32;
-    unsafe fn FLAC__stream_decoder_get_sample_rate(decoder: *mut c_void) -> u32;
-    unsafe fn FLAC__stream_decoder_get_channels(decoder: *mut c_void) -> u32;
-    unsafe fn FLAC__stream_decoder_get_bits_per_sample(decoder: *mut c_void) -> u32;
-    unsafe fn FLAC__stream_decoder_get_total_samples(decoder: *mut c_void) -> u64;
 }
 
 struct FlacEncoder {

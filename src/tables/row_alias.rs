@@ -33,20 +33,6 @@ where
     }
 }
 
-fn bool_from_string(s: &str) -> Result<bool, String> {
-    if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes") || s == "1" {
-        Ok(true)
-    } else if s.eq_ignore_ascii_case("false")
-        || s.eq_ignore_ascii_case("no")
-        || s == "0"
-        || s.is_empty()
-    {
-        Ok(false)
-    } else {
-        Err(format!("invalid bool: {}", s))
-    }
-}
-
 fn empty_as_none_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
 where
     D: Deserializer<'de>,
@@ -56,7 +42,7 @@ where
     if trimmed.is_empty() {
         Ok(None)
     } else {
-        bool_from_string(trimmed)
+        crate::tables::parse_bool(trimmed)
             .map(Some)
             .map_err(serde::de::Error::custom)
     }
@@ -448,12 +434,6 @@ pub struct RowAlias {
     pub row_source_line_number: Option<i32>,
 }
 
-impl crate::tables::Row for RowAlias {
-    fn get_row_name(&self) -> &str {
-        &self.name
-    }
-}
-
 /// Canonicalize a filespec path string: trim whitespace, `/` → `\`, lowercase,
 /// strip leading `\`, collapse consecutive `\`. Empty stays empty.
 fn normalize_path(s: &str) -> String {
@@ -726,20 +706,6 @@ impl RowAlias {
         // Post-merge fixups.
         if self.dist_max_wet.is_none() {
             self.dist_max_wet = self.dist_max_dry;
-        }
-        if self.wet_max_curve.is_empty() {
-            self.wet_max_curve = if self.dry_max_curve.is_empty() {
-                "default".to_string()
-            } else {
-                self.dry_max_curve.clone()
-            };
-        }
-        if self.wet_min_curve.is_empty() {
-            self.wet_min_curve = if self.dry_min_curve.is_empty() {
-                "default".to_string()
-            } else {
-                self.dry_min_curve.clone()
-            };
         }
         if self.pan == "lfe" {
             self.reverb_send = Some(0);

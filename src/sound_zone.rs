@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use rayon::prelude::*;
@@ -99,9 +99,9 @@ impl SoundZone {
                         let alias_path = env.get_sound_alias_dir().join(&src.filename);
                         let aliases = load_table_relaxed(&alias_path)?;
                         // Optional sibling: <scriptid_dir>/<source.filename>.
-                        // Baseline pairs alias CSVs with same-named scriptid
-                        // CSVs to produce the per-zone scriptid lookup. Only
-                        // a small number of zones actually have these.
+                        // Each alias CSV pairs with a same-named scriptid CSV
+                        // to produce the per-zone scriptid lookup. Only a
+                        // small number of zones actually have these.
                         let scriptid_path = env.get_script_id_dir().join(&src.filename);
                         let script_ids = if scriptid_path.exists() {
                             load_table_relaxed::<RowScriptIdLookup>(&scriptid_path)?
@@ -222,7 +222,6 @@ impl SoundZone {
                         format!("alias '{}' has FileSpec but no Looping", alias.name)
                     })?;
                     let is_streamed = matches!(storage_enum, AliasStorage::Streamed);
-                    let compression = alias.compression.unwrap_or(0);
                     // Per-alias override wins; otherwise fall back to the
                     // zone's DefaultAudioCompression.
                     let compression_level = alias
@@ -282,20 +281,16 @@ impl SoundZone {
                             .unwrap_or_else(|| looping_enum.clone());
                         for rf in resolved {
                             let source_name = rf.source_path.to_string_lossy().into_owned();
-                            let converted_name = rf.target_name.clone();
                             out.push(PendingBankAsset {
                                 alias_name: alias.name.clone(),
                                 is_streamed,
-                                converted_name: converted_name.clone(),
+                                converted_name: rf.target_name,
                                 asset: SoundAssetBankSourceAsset {
                                     source_name,
                                     looping: to_converter_looping(&effective_looping),
                                     storage: to_converter_storage(&storage_enum),
-                                    compression,
                                     compression_level,
-                                    locale: language_ref.clone(),
                                     platform: platform_ref.clone(),
-                                    converted_name,
                                 },
                             });
                         }
@@ -329,19 +324,14 @@ impl SoundZone {
 impl SoundZone {
     /// Write the per-zone `.sz` sidecar files alongside the cache/ship banks.
     ///
-    /// Always emits `<zone>.<lang>.alias.sz` (sorted, baseline column set).
-    /// For shared locales (`is_shared`), additionally emits the reverb,
-    /// ambient, ducklist, and musiclist sidecars.
+    /// Always emits `<zone>.<lang>.alias.sz` (sorted, full alias column
+    /// set). For shared locales (`is_shared`), additionally emits the reverb,
+    /// ambient, scriptid, ducklist, and musiclist sidecars, plus
+    /// `<zone>.ambientgeometry.json` when the zone names a map.
     ///
     /// Outputs the engine consumes — `memory.sz`, `assetcount.sz`, and
     /// `assets.sz` — are produced by `update_bank` once the loaded bank has
     /// finished, since they describe the bank's post-build contents.
-    ///
-    /// Two emissions are intentionally deferred:
-    /// * `scriptid.sz` — the script-id table type isn't loaded by this port
-    ///   yet (no `Scriptid` variant in `SoundZoneTableType`).
-    /// * `<zone>.ambientgeometry.json` — requires a port of `AmbientBsp`
-    ///   that doesn't exist here yet.
     pub fn write_outputs(
         &self,
         env: &Env,
@@ -358,9 +348,8 @@ impl SoundZone {
 
         if locale.is_shared {
             let mut reverbs: Vec<&RowReverb> = self.reverbs.iter().collect();
-            // Reverbs sort by descending name — almost certainly an
-            // accidental inversion in the spec, but it's the order
-            // downstream tools have always seen, so we mirror it exactly.
+            // Reverbs sort by descending name; reverb.sz must keep this
+            // order.
             reverbs.sort_by(|a, b| b.name.cmp(&a.name));
             sz_writer::write_reverb_table(&path_for("reverb"), reverbs.iter().copied())?;
 
@@ -368,9 +357,8 @@ impl SoundZone {
             ambients.sort_by(|a, b| a.name.cmp(&b.name));
             sz_writer::write_ambient_table(&path_for("ambient"), ambients.iter().copied())?;
 
-            // Script-ID lookup. Sorted by (ScriptId, AliasName) — matches
-            // the baseline `Row.Compare` ordering for a key of `ScriptId`
-            // and falls back to alias name as a stable tie-break.
+            // Script-ID lookup. Sorted by ScriptId (the table's key), with
+            // alias name as a stable tie-break.
             let mut script_ids: Vec<&RowScriptIdLookup> = self.script_id_lookup.iter().collect();
             script_ids.sort_by(|a, b| {
                 a.script_id
@@ -379,11 +367,10 @@ impl SoundZone {
             });
             sz_writer::write_scriptid_table(&path_for("scriptid"), script_ids.iter().copied())?;
 
-            // Duck names referenced from rows + zone-config Ducks list. The
-            // baseline does a globals lookup against an index of every loaded
-            // .duk; this port only knows about ducks declared as Sources, so
-            // we pass through the names verbatim. Empty / `default` are
-            // baseline sentinels meaning "no duck".
+            // Duck names referenced from alias and ambient rows, plus the
+            // zone config's Ducks list, passed through verbatim (they aren't
+            // checked against the loaded .duk files). Empty and `default`
+            // mean "no duck".
             let mut duck_names: BTreeSet<String> = BTreeSet::new();
             for a in &self.aliases {
                 let d = a.duck.trim();
@@ -424,10 +411,9 @@ impl SoundZone {
 
             // Ambient geometry sidecar. Always written into the shared zone
             // dir (no language infix, `.json` rather than `.sz`) — gated on
-            // the zone actually referencing a map. Phase 1: only the
-            // `Triggers[]` array is populated; `Nodes/Planes/Volumes` are
-            // emitted as empty arrays to match the baseline JSON shape so
-            // downstream parsers don't choke on missing keys.
+            // the zone actually referencing a map. `Planes`, `Volumes` and
+            // `Triggers` come from the map's ambient triggers; `Nodes` is
+            // always an empty array (see `ambient_bsp`).
             if !config.map_file.trim().is_empty() {
                 let map_relative = config.map_file.trim_start_matches(['/', '\\']);
                 let map_path = env.get_maps_source_dir().join(map_relative);
@@ -588,7 +574,6 @@ fn to_converter_storage(s: &AliasStorage) -> CvStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tables::row_locale::RowLocale;
     use crate::tables::row_platform::RowPlatform;
 
     fn test_asset(
@@ -599,23 +584,13 @@ mod tests {
             source_name: source_name.to_string(),
             looping: CvLooping::NonLooping,
             storage: CvStorage::Loaded,
-            compression: 100,
             compression_level,
-            locale: RowLocale {
-                name: "all".to_string(),
-                search_name: "all".to_string(),
-                deploy_name: "all".to_string(),
-                cache_name: "all".to_string(),
-                is_shared: true,
-                compression_scale: 1.0,
-            },
             platform: RowPlatform {
                 platform: "pc".to_string(),
                 converted_asset_version: 14,
                 convert_thread_count: 1,
                 compression_scale: 1.0,
             },
-            converted_name: "shared.LN100.pc.snd".to_string(),
         }
     }
 
@@ -625,8 +600,7 @@ mod tests {
         source_name: &str,
         compression_level: CompressionLevel,
     ) -> PendingBankAsset {
-        let mut asset = test_asset(source_name, compression_level);
-        asset.converted_name = converted_name.to_string();
+        let asset = test_asset(source_name, compression_level);
         PendingBankAsset {
             alias_name: alias_name.to_string(),
             is_streamed: false,
@@ -746,7 +720,7 @@ mod tests {
 
     /// Regression test for the silent-pistol-mike-in-ADS bug.
     ///
-    /// Real baseline data (`weap_mike_fire_plr`, `weap_mike_fire_plr_lfe`)
+    /// Real alias data (`weap_mike_fire_plr`, `weap_mike_fire_plr_lfe`)
     /// has multiple rows that share `(name, FileSpec)` but differ only in
     /// `ContextValue` — one with `train=city` (ADS) and one with
     /// `train=country` (hipfire), both pointing at the same hammer .wav.
@@ -756,12 +730,12 @@ mod tests {
     /// silent in-game.
     ///
     /// This test also locks in the *intended* dedup behaviour: rows that
-    /// match on every keyed column (name + 3 file specs + 4 context
-    /// pairs) collapse to the first occurrence, but anything that differs
-    /// on any of those columns is preserved.
+    /// are identical in every field collapse to the first occurrence, but
+    /// a row that differs in any field is preserved.
     #[test]
     fn dedup_aliases_preserves_context_distinct_rows() {
-        // 12-column header: just the fields the dedup key looks at. Every
+        // 12-column header: name, the three file specs and the four context
+        // pairs. Every
         // RowAlias field has `#[serde(default)]`, so all the unspecified
         // columns deserialize to their type defaults (None / "" / etc.).
         let csv_input = "\

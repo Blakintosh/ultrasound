@@ -10,10 +10,6 @@ use std::fmt::Display;
 use std::path::Path;
 use std::str::FromStr;
 
-pub trait Row {
-    fn get_row_name(&self) -> &str;
-}
-
 pub fn load_table<T: for<'de> serde::Deserialize<'de>>(path: &Path) -> Result<Vec<T>, String> {
     let mut reader = csv::Reader::from_path(path)
         .map_err(|e| format!("Failed to open file {}: {}", path.display(), e))?;
@@ -96,6 +92,12 @@ where
     D: serde::Deserializer<'de>,
 {
     let s: &str = serde::Deserialize::deserialize(deserializer)?;
+    parse_bool(s).map_err(serde::de::Error::custom)
+}
+
+/// Parses a CSV boolean cell: `true`/`yes`/`1` or `false`/`no`/`0`/empty,
+/// case-insensitively.
+pub fn parse_bool(s: &str) -> Result<bool, String> {
     if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes") || s == "1" {
         Ok(true)
     } else if s.eq_ignore_ascii_case("false")
@@ -105,7 +107,7 @@ where
     {
         Ok(false)
     } else {
-        Err(serde::de::Error::custom(format!("invalid bool: {}", s)))
+        Err(format!("invalid bool: {}", s))
     }
 }
 

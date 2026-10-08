@@ -55,18 +55,7 @@ impl BankEntry {
         }
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let expected = std::mem::size_of::<Self>();
-        if bytes.len() < expected {
-            return Err(format!(
-                "BankEntry buffer too small: {} < {}",
-                bytes.len(),
-                expected
-            ));
-        }
-        Ok(unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const Self) })
-    }
-
+    #[cfg(test)]
     pub fn get_frame_rate(&self) -> i32 {
         match self.frame_rate_index {
             0 => 8000,

@@ -1,26 +1,21 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::converted_asset_cache::ConvertedAssetCache;
 use crate::env::Env;
-use crate::source_asset_cache::SourceAssetCache;
 use crate::tables::row_alias::RowAlias;
 use crate::tables::row_locale::RowLocale;
 use crate::tables::row_platform::RowPlatform;
 use crate::tables::row_reverb::{RowReverb, load_reverb_table_with_metadata};
 use crate::tables::{load_table, load_table_relaxed};
 
-/// Per-run global state. Holds everything loaded once at startup and borrowed
-/// mutably through the pipeline (source cache gets updated; template map is
-/// read-only after construction).
+/// Per-run global state: everything loaded once at startup and read through
+/// the rest of the pipeline.
 pub struct SoundDataSnapshot {
     pub env: Env,
     pub platforms: Vec<RowPlatform>,
     pub locales: Vec<RowLocale>,
     pub alias_templates: HashMap<String, RowAlias>,
     pub reverb_lookup: HashMap<String, RowReverb>,
-    pub source_asset_cache: SourceAssetCache,
-    pub converted_asset_cache: ConvertedAssetCache,
 }
 
 impl SoundDataSnapshot {
@@ -38,8 +33,6 @@ impl SoundDataSnapshot {
             locales,
             alias_templates,
             reverb_lookup,
-            source_asset_cache: SourceAssetCache::new(),
-            converted_asset_cache: ConvertedAssetCache::new(),
         })
     }
 

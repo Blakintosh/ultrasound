@@ -1,4 +1,3 @@
-use super::Row;
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
@@ -25,11 +24,5 @@ pub struct RowLocale {
 impl RowLocale {
     pub fn scale_compression(&self, value: i32) -> i32 {
         ((value as f32) * (100.0 * self.compression_scale).floor() / 100.0).floor() as i32
-    }
-}
-
-impl Row for RowLocale {
-    fn get_row_name(&self) -> &str {
-        &self.name
     }
 }

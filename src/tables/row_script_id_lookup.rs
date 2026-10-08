@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::tables::{Row, empty_as_none};
+use crate::tables::empty_as_none;
 
 /// One row of a `<sound>/scriptid/<source>.csv` lookup file. Maps a
 /// script-id string to the alias the engine should play when scripts
@@ -28,10 +28,4 @@ pub struct RowScriptIdLookup {
         deserialize_with = "empty_as_none"
     )]
     pub row_source_line_number: Option<i32>,
-}
-
-impl Row for RowScriptIdLookup {
-    fn get_row_name(&self) -> &str {
-        &self.script_id
-    }
 }

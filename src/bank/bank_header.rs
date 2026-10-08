@@ -1,6 +1,6 @@
 use std::{mem, ptr};
 
-use crate::{bank::bank_entry::BankEntry, source_asset_cache::Checksum};
+use crate::{bank::bank_entry::BankEntry, checksum::Checksum};
 
 const MAGIC: u32 = 592991538u32;
 const BAD_MAGIC: u32 = 3735928559u32;
@@ -91,39 +91,6 @@ impl BankHeader {
         let len = ascii.len().min(LANGUAGE_LENGTH);
 
         self.language[..len].copy_from_slice(&ascii[..len]);
-    }
-
-    pub fn set_dependencies(
-        &mut self,
-        file_name: &str,
-        dependencies: &[&str],
-    ) -> Result<(), String> {
-        let dependency_count = dependencies.len();
-        if dependency_count > MAX_DEPENDENCIES as usize {
-            return Err(format!(
-                "File {} has too many bank dependencies. Maximum of {} allowed.",
-                file_name, MAX_DEPENDENCIES
-            ));
-        }
-
-        self.dependencies.fill(0);
-
-        for i in 0..dependency_count {
-            if dependencies[i].len() > 64 {
-                return Err(format!(
-                    "Bank dependency {} on file {} is too long",
-                    i, file_name
-                ));
-            }
-
-            let bytes = dependencies[i].as_bytes();
-            let offset = i * 64;
-            let len = bytes.len().min(64);
-
-            self.dependencies[offset..offset + len].copy_from_slice(&bytes[..len]);
-        }
-
-        Ok(())
     }
 
     pub fn invalidate(&mut self) {

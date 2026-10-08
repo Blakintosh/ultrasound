@@ -1,6 +1,7 @@
-use super::Row;
 use serde::Deserialize;
 
+// The field set mirrors the platform.csv file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Clone, Deserialize)]
 pub struct RowPlatform {
     #[serde(rename = "Platform")]
@@ -19,15 +20,5 @@ pub struct RowPlatform {
 impl RowPlatform {
     pub fn scale_compression(&self, value: i32) -> i32 {
         ((value as f32) * (100.0 * self.compression_scale).floor() / 100.0).floor() as i32
-    }
-
-    pub fn get_extension(&self) -> String {
-        format!(".{}.snd", self.platform)
-    }
-}
-
-impl Row for RowPlatform {
-    fn get_row_name(&self) -> &str {
-        &self.platform
     }
 }

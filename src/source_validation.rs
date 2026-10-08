@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, io::Read, path::Path, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::source_asset_cache::Checksum;
+use crate::checksum::Checksum;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Stamp {

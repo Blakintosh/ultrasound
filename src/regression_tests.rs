@@ -118,26 +118,16 @@ fn flac_rejects_inconsistent_pcm_dimensions() {
 
 #[test]
 fn conversion_uses_the_hashed_buffer_without_reopening_the_source() {
+    use crate::checksum::Checksum;
     use crate::converter::{
         AliasLooping, AliasStorage, CompressionLevel, SoundAssetBankSourceAsset,
         convert_source_data,
     };
-    use crate::source_asset_cache::Checksum;
     let asset = SoundAssetBankSourceAsset {
         source_name: "this-source-is-not-on-disk.wav".into(),
-        converted_name: "test.LN100.pc.snd".into(),
         looping: AliasLooping::NonLooping,
         storage: AliasStorage::Loaded,
-        compression: 100,
         compression_level: CompressionLevel::None,
-        locale: crate::tables::row_locale::RowLocale {
-            name: "all".into(),
-            search_name: "all".into(),
-            deploy_name: "all".into(),
-            cache_name: "all".into(),
-            is_shared: true,
-            compression_scale: 1.0,
-        },
         platform: crate::tables::row_platform::RowPlatform {
             platform: "pc".into(),
             converted_asset_version: 14,

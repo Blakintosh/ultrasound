@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+// The field set mirrors the .mus file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct MusicSet {
     #[serde(rename = "Name")]
@@ -16,6 +18,8 @@ pub struct MusicSet {
     pub file_name: String,
 }
 
+// The field set mirrors the .mus file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct MusicState {
     #[serde(rename = "Name")]
@@ -38,6 +42,8 @@ pub struct MusicState {
     pub order: i32,
 }
 
+// The field set mirrors the .mus file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct MusicAsset {
     #[serde(rename = "SourceWaveName", default)]

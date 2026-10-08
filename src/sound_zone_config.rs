@@ -6,6 +6,8 @@ use serde::de::IgnoredAny;
 
 use crate::converter::CompressionLevel;
 
+// The field set mirrors the .szc file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Deserialize, Default)]
 pub struct SoundZoneConfig {
     #[serde(rename = "Name")]
@@ -78,6 +80,8 @@ impl SoundZoneConfig {
     }
 }
 
+// The field set mirrors the .szc file format, so some fields are parsed but never read.
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct SoundZoneSource {
     #[serde(rename = "Type")]

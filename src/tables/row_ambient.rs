@@ -21,10 +21,9 @@ where
 pub struct RowAmbient {
     #[serde(rename = "Name")]
     pub name: String,
-    // `Loadspec` exists in some source ambient CSVs but the baseline
-    // schema doesn't define it on RowAmbient — it's ignored on load and
-    // never emitted. We drop it on the floor by leaving no struct field;
-    // serde's relaxed deserializer skips unknown headers cleanly.
+    // `Loadspec` exists in some source ambient CSVs but isn't part of the
+    // ambient table: it's ignored on load and never emitted. Leaving it out
+    // of the struct is enough, since serde skips unknown headers.
     #[serde(rename = "DefaultRoom", default, deserialize_with = "bool_from_string")]
     pub default_room: bool,
     #[serde(
@@ -71,12 +70,6 @@ fn default_default() -> String {
 }
 fn default_one() -> f32 {
     1.0
-}
-
-impl crate::tables::Row for RowAmbient {
-    fn get_row_name(&self) -> &str {
-        &self.name
-    }
 }
 
 #[cfg(test)]

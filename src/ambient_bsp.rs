@@ -94,19 +94,17 @@ impl AmbientBsp {
                 .and_then(|s| s.trim().parse::<i32>().ok())
                 .unwrap_or(0);
 
-            // Baseline takes brush[0] specifically. A trigger with no
-            // brush would crash there on the index access; match that
-            // strictness here so the failure is surfaced at build time
-            // rather than producing an empty volume.
+            // Only the trigger's first brush defines its volume. A trigger
+            // with no brush is an error, surfaced at build time rather than
+            // producing an empty volume.
             let brush_planes: &[Plane] = ent
                 .brushes
                 .first()
                 .map(|b| b.planes.as_slice())
                 .ok_or_else(|| format!("invalid hull on trigger {} (no brush)", next_id))?;
 
-            // Hull validation — same shape as the baseline `Volume.Init`:
-            // enumerate triple-plane intersections, keep the ones inside
-            // every plane, error if none survive.
+            // Hull validation: enumerate triple-plane intersections, keep the
+            // ones inside every plane, error if none survive.
             validate_hull(next_id, brush_planes)?;
 
             let plane_index =
@@ -194,8 +192,8 @@ struct Plane {
 
 impl Plane {
     /// Plane through three points, oriented by the right-hand rule of the
-    /// `(p1-p0) × (p2-p0)` cross product. Matches the baseline `Plane` ctor
-    /// so plane normals point the same way.
+    /// `(p1-p0) × (p2-p0)` cross product, so normals point the way the
+    /// game expects.
     fn from_points(p0: Vec3, p1: Vec3, p2: Vec3) -> Self {
         let n = p1.sub(p0).cross(p2.sub(p0)).normalize();
         let d = -n.dot(p0);
@@ -211,8 +209,8 @@ impl Plane {
     }
 }
 
-/// Three-plane intersection via Cramer's rule, matching the baseline
-/// `Plane.Intersect`. Returns `None` when the three normals are coplanar /
+/// Three-plane intersection via Cramer's rule. Returns `None` when the three
+/// normals are coplanar /
 /// parallel — the determinant `(a.N × b.N) · c.N` falls below `1e-6`.
 fn intersect_three(a: Plane, b: Plane, c: Plane) -> Option<Vec3> {
     let denom = a.n.cross(b.n).dot(c.n);
@@ -225,13 +223,13 @@ fn intersect_three(a: Plane, b: Plane, c: Plane) -> Option<Vec3> {
     Some(v1.add(v2).add(v3).scale(1.0 / denom))
 }
 
-/// `-0.01` slop on the plane-distance test, copied from baseline. Without
+/// `-0.01` slop on the plane-distance test. Without
 /// it, the very vertices we just synthesised by intersecting three of these
 /// planes can fall a hair on the wrong side of one of the *other* planes
 /// and get filtered out by floating-point noise alone.
 const HULL_INSIDE_EPS: f64 = -0.01;
 
-/// Replicates `Volume.Init`'s hull check: every triple of `planes` is
+/// Hull check: every triple of `planes` is
 /// intersected; surviving points must be inside every plane (within
 /// `HULL_INSIDE_EPS`). If none survive, the brush is degenerate.
 fn validate_hull(trigger_id: i32, planes: &[Plane]) -> Result<(), String> {
@@ -258,8 +256,7 @@ fn validate_hull(trigger_id: i32, planes: &[Plane]) -> Result<(), String> {
 }
 
 /// One Radiant entity: KVPs + every brush we managed to parse. Brushes are
-/// retained in declaration order; baseline takes `brushes[0]` for
-/// ambient triggers.
+/// retained in declaration order; ambient triggers use `brushes[0]`.
 struct Entity {
     kvp: HashMap<String, String>,
     brushes: Vec<Brush>,
@@ -271,8 +268,8 @@ struct Brush {
 
 /// Walk the file, recognising entities and the `animations { ... }`
 /// top-level block. Any other top-level content is treated as either a
-/// KVP or a stray line and skipped — the baseline parser is similarly
-/// permissive.
+/// KVP or a stray line and skipped, so unrecognised content never fails
+/// the parse.
 fn parse_entities(text: &str) -> Result<Vec<Entity>, String> {
     let lines: Vec<&str> = text.lines().map(str::trim).collect();
     let mut entities = Vec::new();
@@ -310,7 +307,7 @@ fn parse_entity(lines: &[&str], start: usize) -> Result<(Entity, usize), String>
         return Err(format!("entity at line {} truncated", start + 1));
     }
     if lines[i] != "{" {
-        // Header-only entity. Match the baseline's lenient behavior.
+        // Header-only entity: accepted as an empty entity.
         return Ok((
             Entity {
                 kvp: HashMap::new(),
@@ -647,8 +644,8 @@ mod tests {
         const REF_PATH: &str =
             "test_data/baseline_outputs/zm_karelia/zm_karelia.ambientgeometry.json";
 
-        /// Numeric tolerance for plane / split coefficients. Baseline
-        /// emits integer-valued floats as `0` rather than `0.0`; serde_json
+        /// Numeric tolerance for plane / split coefficients. The reference
+        /// JSON writes integer-valued floats as `0` rather than `0.0`; serde_json
         /// emits `0.0`. Both parse back to the same f64 value, but only
         /// when we compare via parsed numbers rather than as raw strings.
         const EPS: f64 = 1e-6;
@@ -730,7 +727,7 @@ mod tests {
             assert!(!typed.triggers.is_empty(), "fixture has no triggers");
             for t in &typed.triggers {
                 assert!(t.id >= 0);
-                // Priority is parsed as int; baseline always emits it.
+                // Priority is parsed as int; the reference always has it.
                 assert!(t.priority >= -1 << 16);
                 // Room is non-empty for every ambient_package trigger in
                 // a real zone. If a fixture trigger has an empty room
