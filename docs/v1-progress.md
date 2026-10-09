@@ -155,8 +155,8 @@ level's bank size.
 
 | `zm_reactorfour` | Treyarch | Ultrasound 0.3.1 | Ultrasound 1.0.0 |
 | --- | ---: | ---: | ---: |
-| Cold | 54–73 s; 3 of 4 first attempts failed | 10.2 s | 8.7–15.2 s |
-| Unchanged | 18.5–35.3 s | 1.8–2.4 s | 1.8–3.0 s (one 9.1 s outlier) |
+| Cold | 54â€“73 s; 3 of 4 first attempts failed | 10.2 s | 8.7â€“15.2 s |
+| Unchanged | 18.5â€“35.3 s | 1.8â€“2.4 s | 1.8â€“3.0 s (one 9.1 s outlier) |
 
 Unchanged builds reused every source checksum, yet took about as long as 0.3.1's. The remaining time is the
 full byte comparison of roughly 770 MB of deployed banks, kept so that corrupt deployments are repaired. A

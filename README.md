@@ -1,4 +1,8 @@
-# Ultrasound
+<p align="center">
+  <img src="docs/assets/icon.png" alt="" width="96" height="96">
+</p>
+
+<h1 align="center">Ultrasound</h1>
 
 Less noise, more sound. A part of the gscode ecosystem.
 
@@ -81,8 +85,8 @@ Measured on `zm_reactorfour`, a map with 7,898 sounds and 768 MB of banks, on on
 
 | Build | Treyarch's `snd_convert` | Ultrasound 1.0 |
 | --- | ---: | ---: |
-| Full rebuild | 54–73 s | 9–15 s |
-| Nothing changed | 19–35 s | 2–3 s |
+| Full rebuild | 54â€“73 s | 9â€“15 s |
+| Nothing changed | 19â€“35 s | 2â€“3 s |
 
 Treyarch's converter also failed the first attempt at a full rebuild in three of four tries, with "Missing source
 checksum", and succeeded when run again. Your mileage may vary.
