@@ -22,6 +22,8 @@ have use it without any change to your project.
 - Builds maps Treyarch's converter rejects, such as aliases whose names or file paths are longer than it allows.
 - Writes the `.sz` files the Linker reads, and `ambientgeometry.json`.
 - Leaves your deployed banks untouched when a build fails, and rewrites a bank only when its contents change.
+- Adds the shipped sounds a stock-carried alias needs: when `zone_source\<zone>.stocksound.json` is there (the Linker writes
+  it), the listed sounds are copied unchanged from the game's own banks into your map's.
 - Optionally shrinks `.sabl` / `.sabs` banks with lossy compression (see [Settings](#settings)).
 
 ## Requirements
