@@ -34,6 +34,11 @@ impl Env {
         &self.game_dir
     }
 
+    /// The project directory the Linker passed
+    pub fn get_source_dir(&self) -> &Path {
+        &self.source_dir
+    }
+
     /// Gets the platform working directory (per-platform build output root)
     pub fn get_platform_working_dir(&self) -> &Path {
         &self.platform_working_dir

@@ -18,6 +18,7 @@ mod self_update;
 mod sound_data_snapshot;
 mod sound_zone;
 mod sound_zone_config;
+mod stock_donor;
 mod source_validation;
 mod staged_outputs;
 mod string_hash;
@@ -184,14 +185,21 @@ fn single_zone(
         .cloned()
         .ok_or_else(|| format!("unknown language '{}'", language))?;
     zone.write_outputs(&output_env, &config, &locale)?;
+    let donors = stock_donor::load(
+        snapshot.env.get_game_dir(),
+        snapshot.env.get_source_dir(),
+        &zone.name,
+        language,
+        &locale.deploy_name,
+    )?;
 
     // Build both banks concurrently — they share the same rayon pool for
     // FLAC encoding, so the win is mostly from eliminating the gap between
     // the two sequential runs rather than 2x throughput.
     let snap: &SoundDataSnapshot = snapshot;
     let (r_loaded, r_streamed) = rayon::join(
-        || update_bank(snap, &output_env, &zone, platform, language, false),
-        || update_bank(snap, &output_env, &zone, platform, language, true),
+        || update_bank(snap, &output_env, &zone, platform, language, false, &donors),
+        || update_bank(snap, &output_env, &zone, platform, language, true, &donors),
     );
     r_loaded?;
     r_streamed?;

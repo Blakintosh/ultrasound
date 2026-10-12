@@ -24,6 +24,7 @@ pub fn update_bank(
     platform_name: &str,
     language_name: &str,
     streamed: bool,
+    donors: &[crate::stock_donor::DonorSound],
 ) -> Result<(), String> {
     let platform = snapshot
         .get_platform(platform_name)
@@ -85,10 +86,16 @@ pub fn update_bank(
     // bank). Stale entries get replaced (removed by hash + re-added by
     // name). On the first build the bank is empty and everything becomes
     // to_add regardless.
-    let desired_hashes: HashSet<u32> = source_map
+    // Shipped sounds a stock-carried alias needs; a sound the map's own sources also name is the map's.
+    let donors: Vec<&crate::stock_donor::DonorSound> = donors
+        .iter()
+        .filter(|d| d.streamed == streamed && !source_map.contains_key(&d.name))
+        .collect();
+    let mut desired_hashes: HashSet<u32> = source_map
         .keys()
         .map(|name| string_hash::hash(name))
         .collect();
+    desired_hashes.extend(donors.iter().map(|d| string_hash::hash(&d.name)));
 
     // name_hash → stored source checksum from the existing bank.
     let existing_checksums: HashMap<u32, Checksum> = bank
@@ -130,6 +137,15 @@ pub fn update_bank(
         .into_iter()
         .flatten()
         .collect();
+    let mut converted = converted;
+    for d in &donors {
+        let hash = string_hash::hash(&d.name);
+        let source_checksum = Checksum::from_data_with_recipe(&d.data, b"stock sound");
+        if existing_checksums.get(&hash) == Some(&source_checksum) {
+            continue;
+        }
+        converted.insert(d.name.clone(), crate::stock_donor::as_converted(d, source_checksum));
+    }
     let to_add: HashSet<String> = converted.keys().cloned().collect();
     for name in &to_add {
         let hash = string_hash::hash(name);
