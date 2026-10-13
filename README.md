@@ -53,6 +53,11 @@ release in the background, verifies the download against the release's SHA-256 c
 installer. Only a copy in a Black Ops III `sound` folder updates itself. Its update state lives in
 `%LOCALAPPDATA%\gscode\ultrasound`, not in the game folder.
 
+When a program that manages updates starts the build (Blackbird does, and lists Ultrasound under Tools > Components),
+it sets `BO3MT_UPDATES_MANAGED_BY` in the environment, and Ultrasound then never checks for or installs an update
+itself. `snd_convert --check-update --json` prints what such a program needs (`current`, `latest`, `url`, `digest`,
+`notes`, `bundle_url`; cached for a day, `--refresh` skips the cache, it installs nothing and always exits 0).
+
 ## Uninstalling
 
 Open the setup and choose Uninstall. It puts Treyarch's converter back and removes everything it added.

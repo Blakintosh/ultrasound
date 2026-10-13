@@ -12,6 +12,11 @@
 * Ultrasound lists itself in the Mod Tools components registry (`ultrasound.json`), so other tools can find it and its
   version. Set `ULTRASOUND_NO_REGISTRY=1` to leave the registry alone.
 
+* Blackbird now updates Ultrasound along with its other components. It tells Ultrasound so with the environment
+  variable `BO3MT_UPDATES_MANAGED_BY`; while that is set, Ultrasound's own background update never runs. Used from
+  anywhere else it updates itself exactly as before. `snd_convert --check-update --json` answers whether a newer
+  release exists (cached for a day, installs nothing) for programs that do the updating.
+
 ## 1.0.0
 
 Your first build after updating reconverts every sound once, because the conversion recipe changed. Builds
