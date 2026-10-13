@@ -89,6 +89,19 @@ pub fn download(
     max_secs: u64,
     api: bool,
 ) -> Result<(), String> {
+    download_limited(url, out, protocols, 10, max_secs, 268_435_456, api)
+}
+
+/// [`download`] with its own connect time, total time and size limits (the `--check-update` probe is small and quick).
+pub fn download_limited(
+    url: &str,
+    out: &Path,
+    protocols: &str,
+    connect_secs: u64,
+    max_secs: u64,
+    max_bytes: u64,
+    api: bool,
+) -> Result<(), String> {
     let mut command = Command::new(system_tool("curl.exe"));
     command
         .args([
@@ -102,11 +115,11 @@ pub fn download(
         ])
         .args([
             "--connect-timeout",
-            "10",
+            &connect_secs.to_string(),
             "--max-time",
             &max_secs.to_string(),
         ])
-        .args(["--max-filesize", "268435456"])
+        .args(["--max-filesize", &max_bytes.to_string()])
         .args([
             "--user-agent",
             concat!("ultrasound/", env!("CARGO_PKG_VERSION")),

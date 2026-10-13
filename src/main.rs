@@ -61,6 +61,18 @@ struct Args {
     #[arg(long)]
     capabilities: bool,
 
+    /// Ask the release feed for a newer Ultrasound and print the answer; installs nothing
+    #[arg(long)]
+    check_update: bool,
+
+    /// With --check-update: print one JSON line
+    #[arg(long, requires = "check_update")]
+    json: bool,
+
+    /// With --check-update: skip the daily cache
+    #[arg(long, requires = "check_update")]
+    refresh: bool,
+
     /// The arguments the Linker passes: <platform> <platform_working_dir> <unused> <action>
     /// <source_dir> [action args...]
     raw_args: Vec<String>,
@@ -99,6 +111,10 @@ fn try_main() -> Result<(), String> {
     let args = Args::parse();
     if args.update {
         self_update::run_update();
+        return Ok(());
+    }
+    if args.check_update {
+        self_update::check_update(args.json, args.refresh);
         return Ok(());
     }
     // (asked by Dragon before it carries stock sounds: nothing else is printed, read or updated)
@@ -285,6 +301,14 @@ mod tests {
         ])
         .expect("parse");
         assert!(!a.capabilities);
+    }
+
+    #[test]
+    fn check_update_flags_parse_without_linker_args() {
+        let a =
+            Args::try_parse_from(["snd_convert.exe", "--check-update", "--json"]).expect("parse");
+        assert!(a.check_update && a.json && !a.refresh);
+        assert!(Args::try_parse_from(["snd_convert.exe", "--json"]).is_err());
     }
 
     #[test]

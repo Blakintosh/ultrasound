@@ -49,6 +49,8 @@ pub struct Release {
     pub bundle: Option<Bundle>,
     /// The download URL of `ultrasound-setup.exe`, when the release has one.
     pub installer: Option<String>,
+    /// The release body (Markdown), cut to 16 KiB.
+    pub notes: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,6 +65,8 @@ pub struct Bundle {
 struct ApiRelease {
     tag_name: String,
     html_url: Option<String>,
+    #[serde(default)]
+    body: Option<String>,
     #[serde(default)]
     draft: bool,
     #[serde(default)]
@@ -117,7 +121,20 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
         url,
         bundle,
         installer,
+        notes: cut_notes(api.body.unwrap_or_default()),
     })
+}
+
+fn cut_notes(mut notes: String) -> String {
+    const MAX: usize = 16 * 1024;
+    if notes.len() > MAX {
+        let mut end = MAX;
+        while !notes.is_char_boundary(end) {
+            end -= 1;
+        }
+        notes.truncate(end);
+    }
+    notes
 }
 
 /// Parses an asset digest of the form `sha256:<64 hex digits>`.
@@ -200,6 +217,7 @@ mod tests {
         assert_eq!(bundle.url, "https://x/zip");
         assert_eq!(bundle.sha256, Some([0xab; 32]));
         assert_eq!(release.installer.as_deref(), Some("https://x/setup"));
+        assert_eq!(release.notes, "notes");
     }
 
     #[test]

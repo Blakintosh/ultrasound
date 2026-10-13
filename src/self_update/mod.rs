@@ -5,6 +5,7 @@
 //! the bundle, and records the outcome in a state file; the next run prints it. Nothing here may fail
 //! or slow down a sound build, so every error is swallowed.
 
+mod check;
 mod detach;
 mod install;
 mod release;
@@ -21,6 +22,25 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const LATEST_URL: &str = "https://api.github.com/repos/Blakintosh/ultrasound/releases/latest";
 const FEED_OVERRIDE: &str = "GSCODE_UPDATE_FEED";
 const UPDATE_FLAG: &str = "--update";
+/// A host that manages updates (Blackbird) sets this to its name in the environment of every build it starts.
+/// Products with an updater of their own defer to it: this copy then never checks for or installs an update itself.
+pub const MANAGED_BY: &str = "BO3MT_UPDATES_MANAGED_BY";
+
+/// The host managing this process's updates, when [`MANAGED_BY`] is set and not empty.
+pub fn managed_by() -> Option<String> {
+    managed_value(std::env::var_os(MANAGED_BY))
+}
+
+fn managed_value(value: Option<std::ffi::OsString>) -> Option<String> {
+    value
+        .map(|v| v.to_string_lossy().trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// `--check-update [--json] [--refresh]`.
+pub fn check_update(json: bool, refresh: bool) {
+    check::run(json, refresh);
+}
 
 /// An installed copy: `snd_convert.exe` in a Black Ops III `sound` folder, beside `BlackOps3.exe` or
 /// the Mod Tools' `share` folder. Any other copy (a development build in `target/`) never updates.
@@ -96,6 +116,9 @@ pub fn on_start() {
 
 /// After a successful run: start the background check if one is due. Never waits for it.
 pub fn after_success() {
+    if managed_by().is_some() {
+        return;
+    }
     let Some(install) = Install::locate() else {
         return;
     };
@@ -128,6 +151,9 @@ enum Outcome {
 
 /// The `--update` process. Writes nothing to stdout/stderr; the outcome goes to the state file.
 pub fn run_update() {
+    if managed_by().is_some() {
+        return;
+    }
     let Some(install) = Install::locate() else {
         return;
     };
@@ -261,5 +287,22 @@ fn check_and_install(install: &Install, work: &Path) -> Outcome {
             url: release.url.clone(),
         },
         Err(e) => unavailable(e),
+    }
+}
+
+#[cfg(test)]
+mod managed_tests {
+    use super::*;
+    use std::ffi::OsString;
+
+    #[test]
+    fn a_non_empty_value_means_managed() {
+        assert_eq!(
+            managed_value(Some(OsString::from("blackbird"))).as_deref(),
+            Some("blackbird")
+        );
+        assert_eq!(managed_value(Some(OsString::from(" "))), None);
+        assert_eq!(managed_value(Some(OsString::new())), None);
+        assert_eq!(managed_value(None), None);
     }
 }
