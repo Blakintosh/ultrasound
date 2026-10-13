@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased (1.1.0)
+## 1.1.0
 
 * Shipped sounds for stock-carried aliases. When the Linker's stock carry (Dragon) has copied sound aliases that only a
   shipped bank defines into your map, it lists the sounds they play in `zone_source\<zone>.stocksound.json`. Ultrasound
   copies those sounds, as they are (no decoding, no encoding), out of the game's `zone\snd` banks into your map's
   `.sabl` / `.sabs`, and prints `stock sounds [all]: N from M shipped bank(s), K not found`. A sound your own sources
   also name stays yours. Without the file nothing changes and nothing is printed.
+* `snd_convert --capabilities` prints one line of JSON naming the tool, its version and the stock sound request
+  contract it understands, so the Linker can check before it asks for stock sounds. It does nothing else.
+* Ultrasound lists itself in the Mod Tools components registry (`ultrasound.json`), so other tools can find it and its
+  version. Set `ULTRASOUND_NO_REGISTRY=1` to leave the registry alone.
 
 ## 1.0.0
 
