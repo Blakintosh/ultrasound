@@ -144,7 +144,10 @@ pub fn update_bank(
         if existing_checksums.get(&hash) == Some(&source_checksum) {
             continue;
         }
-        converted.insert(d.name.clone(), crate::stock_donor::as_converted(d, source_checksum));
+        converted.insert(
+            d.name.clone(),
+            crate::stock_donor::as_converted(d, source_checksum),
+        );
     }
     let to_add: HashSet<String> = converted.keys().cloned().collect();
     for name in &to_add {

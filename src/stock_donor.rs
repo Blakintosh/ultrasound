@@ -91,7 +91,9 @@ impl Shipped {
         let mut raw = vec![0u8; count * ENTRY];
         f.read_exact(&mut raw).ok()?;
         let entries = (0..count)
-            .map(|i| unsafe { std::ptr::read_unaligned(raw[i * ENTRY..].as_ptr() as *const BankEntry) })
+            .map(|i| unsafe {
+                std::ptr::read_unaligned(raw[i * ENTRY..].as_ptr() as *const BankEntry)
+            })
             .collect();
         let deps = (0..8)
             .filter_map(|i| {
@@ -100,7 +102,11 @@ impl Shipped {
                 (end > 0).then(|| String::from_utf8_lossy(&s[..end]).to_ascii_lowercase())
             })
             .collect();
-        Some(Shipped { path: path.to_path_buf(), deps, entries })
+        Some(Shipped {
+            path: path.to_path_buf(),
+            deps,
+            entries,
+        })
     }
 
     fn find(&self, hash: u32) -> Option<BankEntry> {
@@ -112,13 +118,21 @@ impl Shipped {
         let mut f = File::open(&self.path).map_err(|x| format!("{}: {x}", self.path.display()))?;
         f.seek(SeekFrom::Start(offset)).map_err(|x| x.to_string())?;
         let mut v = vec![0u8; size as usize];
-        f.read_exact(&mut v).map_err(|x| format!("{}: {x}", self.path.display()))?;
+        f.read_exact(&mut v)
+            .map_err(|x| format!("{}: {x}", self.path.display()))?;
         Ok(v)
     }
 }
 
 /// Finds `hash` in the bank `donor.<dir>` and the banks it depends on.
-fn locate(snd: &Path, dir: &str, donor: &str, hash: u32, streamed: bool, cache: &mut Vec<(PathBuf, Option<std::rc::Rc<Shipped>>)>) -> Option<(std::rc::Rc<Shipped>, BankEntry)> {
+fn locate(
+    snd: &Path,
+    dir: &str,
+    donor: &str,
+    hash: u32,
+    streamed: bool,
+    cache: &mut Vec<(PathBuf, Option<std::rc::Rc<Shipped>>)>,
+) -> Option<(std::rc::Rc<Shipped>, BankEntry)> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut todo: Vec<String> = vec![donor.to_ascii_lowercase()];
     let mut i = 0;
@@ -136,7 +150,11 @@ fn locate(snd: &Path, dir: &str, donor: &str, hash: u32, streamed: bool, cache: 
                 let slot = match cache.iter().position(|(c, _)| *c == path) {
                     Some(k) => k,
                     None => {
-                        let b = if path.is_file() { Shipped::open(&path).map(std::rc::Rc::new) } else { None };
+                        let b = if path.is_file() {
+                            Shipped::open(&path).map(std::rc::Rc::new)
+                        } else {
+                            None
+                        };
                         cache.push((path.clone(), b));
                         cache.len() - 1
                     }
@@ -155,19 +173,38 @@ fn locate(snd: &Path, dir: &str, donor: &str, hash: u32, streamed: bool, cache: 
 }
 
 /// The sounds to put into the `language` banks (folder `dir`) of `zone`: empty (and silent) unless the request file is there.
-pub fn load(game_dir: &Path, source_dir: &Path, zone: &str, language: &str, dir: &str) -> Result<Vec<DonorSound>, String> {
-    let path = source_dir.join("zone_source").join(format!("{zone}.stocksound.json"));
-    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(Vec::new()) };
-    let req: Request = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+pub fn load(
+    game_dir: &Path,
+    source_dir: &Path,
+    zone: &str,
+    language: &str,
+    dir: &str,
+) -> Result<Vec<DonorSound>, String> {
+    let path = source_dir
+        .join("zone_source")
+        .join(format!("{zone}.stocksound.json"));
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(Vec::new());
+    };
+    let req: Request =
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     if req.stock_sound_contract != CONTRACT {
-        return Err(format!("{}: stock sound contract {} is not {CONTRACT}; update Ultrasound", path.display(), req.stock_sound_contract));
+        return Err(format!(
+            "{}: stock sound contract {} is not {CONTRACT}; update Ultrasound",
+            path.display(),
+            req.stock_sound_contract
+        ));
     }
     let snd = game_dir.join("zone").join("snd");
     let mut cache = Vec::new();
     let mut out: Vec<DonorSound> = Vec::new();
     let mut seen: HashSet<(u32, bool)> = HashSet::new();
     let (mut missing, mut banks) = (0usize, HashSet::new());
-    for r in req.entries.iter().filter(|r| r.language.eq_ignore_ascii_case(language)) {
+    for r in req
+        .entries
+        .iter()
+        .filter(|r| r.language.eq_ignore_ascii_case(language))
+    {
         let streamed = r.storage.eq_ignore_ascii_case("streamed");
         let hash = string_hash::hash(&r.file);
         if !seen.insert((hash, streamed)) {
@@ -177,40 +214,70 @@ pub fn load(game_dir: &Path, source_dir: &Path, zone: &str, language: &str, dir:
             Some((bank, entry)) if entry.format != 0 && entry.format != 8 => {
                 let f = entry.format;
                 missing += 1;
-                println!("  stock sounds: '{}' is stored as format {f}, which a bank of this build does not hold", r.file);
+                println!(
+                    "  stock sounds: '{}' is stored as format {f}, which a bank of this build does not hold",
+                    r.file
+                );
                 let _ = bank;
             }
             Some((bank, entry)) => {
                 banks.insert(bank.path.clone());
                 let data = bank.read(&entry)?;
-                out.push(DonorSound { name: r.file.clone(), streamed, entry, data });
+                out.push(DonorSound {
+                    name: r.file.clone(),
+                    streamed,
+                    entry,
+                    data,
+                });
             }
             None => {
                 missing += 1;
-                println!("  stock sounds: '{}' is in no bank of {} (its alias will be silent)", r.file, r.donor);
+                println!(
+                    "  stock sounds: '{}' is in no bank of {} (its alias will be silent)",
+                    r.file, r.donor
+                );
             }
         }
     }
     if !out.is_empty() || missing > 0 {
-        println!("  stock sounds [{language}]: {} from {} shipped bank(s), {} not found", out.len(), banks.len(), missing);
+        println!(
+            "  stock sounds [{language}]: {} from {} shipped bank(s), {} not found",
+            out.len(),
+            banks.len(),
+            missing
+        );
     }
     Ok(out)
 }
 
-const RATES: [i32; 9] = [8000, 12000, 16000, 24000, 32000, 44100, 48000, 96000, 192000];
+const RATES: [i32; 9] = [
+    8000, 12000, 16000, 24000, 32000, 44100, 48000, 96000, 192000,
+];
 
 /// The sound as the bank writer takes a converted one: the data untouched, the entry's fields as the shipped bank
 /// states them.
-pub fn as_converted(d: &DonorSound, source_checksum: crate::checksum::Checksum) -> (crate::converter::SoundAssetBankConvertedAsset, Vec<u8>) {
+pub fn as_converted(
+    d: &DonorSound,
+    source_checksum: crate::checksum::Checksum,
+) -> (crate::converter::SoundAssetBankConvertedAsset, Vec<u8>) {
     use crate::converter::{AliasLooping, AssetFormat, SoundAssetBankConvertedAsset};
     let e = d.entry;
-    let (rate_index, channels, looping, format) = (e.frame_rate_index, e.channel_count, e.looping, e.format);
+    let (rate_index, channels, looping, format) =
+        (e.frame_rate_index, e.channel_count, e.looping, e.format);
     (
         SoundAssetBankConvertedAsset {
             converted_checksum: crate::checksum::Checksum::from_data(&d.data),
             source_checksum,
-            format: if format == 0 { AssetFormat::SndAssetFormatPcms16 } else { AssetFormat::SndAssetFormatFlac },
-            looping: if looping == 1 { AliasLooping::Looping } else { AliasLooping::NonLooping },
+            format: if format == 0 {
+                AssetFormat::SndAssetFormatPcms16
+            } else {
+                AssetFormat::SndAssetFormatFlac
+            },
+            looping: if looping == 1 {
+                AliasLooping::Looping
+            } else {
+                AliasLooping::NonLooping
+            },
             frame_count: e.frame_count as i64,
             frame_rate: RATES.get(rate_index as usize).copied().unwrap_or(48000),
             channel_count: channels as i32,
@@ -242,8 +309,14 @@ mod tests {
     fn a_newer_contract_is_refused() {
         let dir = std::env::temp_dir().join(format!("us_donor_contract_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("zone_source")).unwrap();
-        std::fs::write(dir.join("zone_source").join("zm_x.stocksound.json"), r#"{"stock_sound_contract": 2, "entries": []}"#).unwrap();
-        let err = load(&dir, &dir, "zm_x", "all", "all").err().expect("refused");
+        std::fs::write(
+            dir.join("zone_source").join("zm_x.stocksound.json"),
+            r#"{"stock_sound_contract": 2, "entries": []}"#,
+        )
+        .unwrap();
+        let err = load(&dir, &dir, "zm_x", "all", "all")
+            .err()
+            .expect("refused");
         assert!(err.contains("contract 2"), "{err}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
