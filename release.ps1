@@ -33,8 +33,24 @@ if ($Publish) {
 }
 
 # The cargo binary is ultrasound.exe; it ships as snd_convert.exe, beside the libFLAC.dll it links against.
+# Panic locations embed source paths: remap them so the exe doesn't name this machine's user, cargo or rustup folders
+# (rustc applies the last matching prefix, so the broad user-folder map goes first). /DEBUG:NONE and strip keep the
+# exe from naming a PDB or carrying symbols.
+$cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
+$rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $env:USERPROFILE '.rustup' }
+$maps = "$env:USERPROFILE=home", "$root=.", "$cargoHome=cargo", "$rustupHome=rustup"
+$env:RUSTFLAGS = (@($maps | ForEach-Object { "--remap-path-prefix=$_" }) + '-Clink-arg=/DEBUG:NONE') -join ' '
+$env:CARGO_PROFILE_RELEASE_STRIP = 'symbols'
+$env:CARGO_PROFILE_RELEASE_DEBUG = '0'
 cargo build --release --manifest-path "$root\Cargo.toml"
 if ($LASTEXITCODE) { throw "cargo build failed ($LASTEXITCODE)" }
+$targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "$root\target" }
+$built = "$targetDir\release\ultrasound.exe"
+$bytes = [IO.File]::ReadAllBytes($built)
+$text = [Text.Encoding]::ASCII.GetString($bytes) + "`n" + [Text.Encoding]::Unicode.GetString($bytes)
+$bad = @('J:\', 'I:\SteamLibrary', $env:USERPROFILE, 'C:\Users\', '.pdb') |
+    Where-Object { $text.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }
+if ($bad) { throw "release exe still contains: $($bad -join ', ')" }
 
 $name = "$id-$version-win-x64"
 $artifacts = Join-Path $root 'artifacts'
@@ -42,7 +58,7 @@ $stage = Join-Path $artifacts $name
 $zip = "$stage.zip"
 Remove-Item $stage, $zip -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory "$stage\sound" -Force | Out-Null
-Copy-Item "$root\target\release\ultrasound.exe" "$stage\sound\snd_convert.exe"
+Copy-Item $built "$stage\sound\snd_convert.exe"
 Copy-Item "$root\lib\libFLAC.dll" "$stage\sound\libFLAC.dll"
 [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip)
 
