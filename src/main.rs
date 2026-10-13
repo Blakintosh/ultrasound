@@ -13,14 +13,15 @@ mod flac;
 mod music;
 mod obtainer;
 mod ogg;
+mod registry;
 mod riff;
 mod self_update;
 mod sound_data_snapshot;
 mod sound_zone;
 mod sound_zone_config;
-mod stock_donor;
 mod source_validation;
 mod staged_outputs;
+mod stock_donor;
 mod string_hash;
 mod sz_writer;
 mod tables;
@@ -55,6 +56,10 @@ struct Args {
     /// Internal: check for and install an update, started in the background
     #[arg(long, hide = true)]
     update: bool,
+
+    /// Print what this build can do (features, stock sound request versions) as one JSON line, and exit
+    #[arg(long)]
+    capabilities: bool,
 
     /// The arguments the Linker passes: <platform> <platform_working_dir> <unused> <action>
     /// <source_dir> [action args...]
@@ -96,10 +101,16 @@ fn try_main() -> Result<(), String> {
         self_update::run_update();
         return Ok(());
     }
+    // (asked by Dragon before it carries stock sounds: nothing else is printed, read or updated)
+    if args.capabilities {
+        println!("{}", registry::capabilities_json());
+        return Ok(());
+    }
     let started = std::time::Instant::now();
     VERBOSE.store(args.verbose, std::sync::atomic::Ordering::Relaxed);
     println!("Ultrasound {}", env!("CARGO_PKG_VERSION"));
     self_update::on_start();
+    registry::record_self();
 
     let (platform_working_dir, source_dir) = env_args(&args.raw_args)?;
 
@@ -255,6 +266,25 @@ mod tests {
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|v| (*v).to_string()).collect()
+    }
+
+    #[test]
+    fn capabilities_flag_needs_no_linker_args() {
+        let a = Args::try_parse_from(["snd_convert.exe", "--capabilities"]).expect("parse");
+        assert!(a.capabilities);
+        assert!(a.raw_args.is_empty());
+        let a = Args::try_parse_from([
+            "snd_convert.exe",
+            "pc",
+            "usermaps\\m",
+            "usermaps\\m",
+            "zone_source",
+            "usermaps\\m",
+            "all",
+            "m",
+        ])
+        .expect("parse");
+        assert!(!a.capabilities);
     }
 
     #[test]

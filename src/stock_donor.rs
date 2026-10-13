@@ -18,7 +18,8 @@ use serde::Deserialize;
 use crate::bank::bank_entry::BankEntry;
 use crate::string_hash;
 
-const CONTRACT: u32 = 1;
+/// The version of `<zone>.stocksound.json` this build reads (`--capabilities` advertises it).
+pub const CONTRACT: u32 = 1;
 const MAGIC: u32 = 592991538;
 const HEADER: usize = 2048;
 const ENTRY: usize = std::mem::size_of::<BankEntry>();

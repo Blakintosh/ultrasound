@@ -63,7 +63,23 @@ To do it by hand, with the Mod Tools closed, move `snd_convert.exe` and `libFLAC
 verify the Mod Tools in Steam, which puts Treyarch's files back.
 
 To remove Ultrasound's cached data as well, delete `%LOCALAPPDATA%\gscode\ultrasound`, and the `*.usn.json`
-files beside your map's cached banks in `sound\zone\CachedBanks`.
+files beside your map's cached banks in `sound\zone\CachedBanks`. Its entry in the Mod Tools components registry,
+`%LOCALAPPDATA%\BO3ModTools\components\<install hash>\ultrasound.json`, can go too.
+
+## For other tools
+
+`snd_convert.exe --capabilities` prints one line of JSON and exits, without reading or updating anything:
+
+```json
+{"features":["stock-sounds"],"id":"ultrasound","stock_sound_contract":[1,1],"version":"1.1.0"}
+```
+
+`stock_sound_contract` is the range of `<zone>.stocksound.json` versions it reads. Treyarch's converter and
+Ultrasound 1.0 don't know the switch, so anything other than this JSON means no stock sounds. Each build by a copy
+installed in a game's `sound` folder also writes the same facts, with `path`, `exe_size` and `exe_mtime`, to
+`%LOCALAPPDATA%\BO3ModTools\components\<install hash>\ultrasound.json`, the registry Apex, Blackbird and the Stock
+Library read. The hash is FNV-1a 64 of the lower-cased canonical install path, as the other products compute it.
+Set `BBL_NO_REGISTRY=1` or `ULTRASOUND_NO_REGISTRY=1` to leave the registry alone.
 
 ## Settings
 
